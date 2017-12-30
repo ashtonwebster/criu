@@ -24,6 +24,9 @@
 
 static int page_server_sk = -1;
 
+static u64 pointers_to_redact[10];
+static int num_pointers_to_redact = 0;
+
 struct page_server_iov {
 	u32	cmd;
 	u32	nr_pages;
@@ -208,13 +211,56 @@ static int open_page_server_xfer(struct page_xfer *xfer, int fd_type, unsigned l
 	return 0;
 }
 
+static void redact(void *page_buffer, unsigned long len) {
+	void *found = (void *)0;
+	found = memmem(page_buffer, len, "awmagic", 8);
+	if (found) {
+		pr_info("awmagic flag found at offset %lu\n", found - page_buffer);
+		strncpy((char *)found, "cigamwa", 8);
+		// copy the pointer in
+		memcpy(&pointers_to_redact[num_pointers_to_redact++], found + 8, 8);
+	}
+}
+
 /* local xfer */
 static int write_pages_loc(struct page_xfer *xfer,
 		int p, unsigned long len)
 {
 	ssize_t ret;
 	ssize_t curr = 0;
+	void *page_buffer = xmalloc(len);
+	if (page_buffer == 0) { 
+		pr_err("Out of memory\n");
+		return -1;
+	}
 
+	// read from pipe to userspace buffer
+	while (1) {
+		ret = read(p, page_buffer, len);
+		if (ret == -1) {
+			pr_perror("Unable to read data");
+			return -1;
+		}
+		if (ret == 0) { 
+			pr_err("A pipe was closed unexpectedly\n");
+			return -1;
+		}
+		curr += ret;
+		if (curr == len)
+			break;
+
+	}
+
+	// start redaction here
+	redact(page_buffer, len);
+
+	// write from userspace buffer to img file
+	if ((ret = write(img_raw_fd(xfer->pi), page_buffer, len)) != len) { 
+		pr_err("unable to write data, wanted to write %lu but wrote %lu\n", len, ret);
+		return -1;
+	}
+	xfree(page_buffer);
+	/*
 	while (1) {
 		ret = splice(p, NULL, img_raw_fd(xfer->pi), NULL, len - curr, SPLICE_F_MOVE);
 		if (ret == -1) {
@@ -229,6 +275,7 @@ static int write_pages_loc(struct page_xfer *xfer,
 		if (curr == len)
 			break;
 	}
+	*/
 
 	return 0;
 }
@@ -447,9 +494,78 @@ static inline u32 ppb_xfer_flags(struct page_xfer *xfer, struct page_pipe_buf *p
 	else
 		return PE_PRESENT;
 }
+/*
+static int redact_pointers(struct page_xfer *xfer, struct page_pipe_buf *ppb) {
+	unsigned int i, j;
+	unsigned int file_offset = file_offset_start;
+	unsigned int real_file_offset;
+	unsigned int original_position;
+	u64 pointer;
+	struct iovec iov;
+	int ret;
+	for (i = 0; i < num_pointers_to_redact; i++) {
+		pointer = pointers_to_redact[i];
+		// find the correct offset in the file
+		for (j = 0; j < ppb->nr_segs; j++) {
+			iov = ppb->iov[j];
+			// does this VMA contain our pointer address?
+			if (encode_pointer(iov.iov_base) <= pointer &&
+					pointer < encode_pointer(iov.iov_base) + iov.iov_len) {
+				// if yes, seek to the position and write to it
+				real_file_offset = file_offset + (0xfff & pointer);
+				pr_info("cleaning pointer, segment base: %lx len: %d pointer: %p real_file_offset: %x\n", (unsigned long)iov.iov_base, (int)iov.iov_len, 
+						(void *)pointer, real_file_offset);
+				original_position = lseek(img_raw_fd(xfer->pi), 0, SEEK_CUR);
+				lseek(img_raw_fd(xfer->pi), real_file_offset, SEEK_SET);
+				if ((ret = write(img_raw_fd(xfer->pi), "654321", 7)) != 7) {
+					pr_err("should have written 7 bytes but instead wrote %d\n", ret);
+					return -1;
+				}
+				// reset to original file position
+				lseek(img_raw_fd(xfer->pi), original_position, SEEK_SET);
+			}
+			// in any case increment the offset
+			file_offset += iov.iov_len;
+			pr_info("file_offset: %d\n", file_offset);
+		}
+		file_offset = file_offset_start;
+	}
+	return 0;
+}
+*/
+static int redact_pointers2(int page_fd, struct iovec iov, unsigned int file_offset) {
+	int i;
+	unsigned int pointer_offset;
+	unsigned int original_position;
+	u64 pointer;
+	int ret;
+	// for each pointer
+	for (i = 0; i < num_pointers_to_redact; i++) {
+		pointer = pointers_to_redact[i];
+		// check if current iov contains pointer
+		if (encode_pointer(iov.iov_base) <= pointer &&
+					pointer < encode_pointer(iov.iov_base) + iov.iov_len) {
+			// if yes, seek to the position and write to it
+			pointer_offset = file_offset + (0xfff & pointer);
+			pr_info("cleaning pointer, segment base: %lx len: %d pointer: %p pointer_offset: %x\n", (unsigned long)iov.iov_base, (int)iov.iov_len, 
+					(void *)pointer, pointer_offset);
+			// save original position in file
+			original_position = lseek(page_fd, 0, SEEK_CUR);
+			lseek(page_fd, pointer_offset, SEEK_SET);
+			if ((ret = write(page_fd, "654321", 7)) != 7) {
+				pr_err("should have written 7 bytes but instead wrote %d\n", ret);
+				return -1;
+			}
+			// reset to original file position
+			lseek(page_fd, original_position, SEEK_SET);
+		}
+	}
+	return 0;
+}
 
 int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 {
+	unsigned int file_offset_start = 0;
 	struct page_pipe_buf *ppb;
 	unsigned int cur_hole = 0;
 	int ret;
@@ -481,7 +597,12 @@ int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 			if ((flags & PE_PRESENT) && xfer->write_pages(xfer,
 						ppb->p[0], iov.iov_len))
 				return -1;
+			// redact pointers
+			redact_pointers2(img_raw_fd(xfer->pi), iov, file_offset_start);
+			file_offset_start += iov.iov_len;
 		}
+		// AW: post redaction
+		//if (redact_pointers(xfer, ppb) != 0) return -1;
 	}
 
 	return dump_holes(xfer, pp, &cur_hole, NULL);

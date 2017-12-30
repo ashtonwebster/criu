@@ -41,3 +41,5 @@ lib/.crit-setup.files
 compel/include/asm
 include/common/asm
 include/common/config.h
+imgs*
+build/
