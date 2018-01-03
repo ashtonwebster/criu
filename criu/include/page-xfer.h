@@ -7,6 +7,52 @@ struct ps_info {
 	unsigned short port;
 };
 
+// add more to this... such as matching on specific fields
+struct redact_match {
+	char *magic;
+	unsigned int magic_len;
+};
+
+struct raw_action {
+	int offset;
+	char *replace_bytes;
+	unsigned int rb_len;
+	struct raw_action *next;
+};
+
+struct pointer_action {
+	int offset; // offset from magic number
+	// TODO: implement below for arbitrary depth recursive pointers
+	//union { raw_action, pointer_action } 
+	//type 
+	unsigned int len;
+	char *replace_bytes;
+	struct pointer_action *next;
+};
+
+struct redact_task {
+	int magic_offset;
+	struct redact_match match;
+	struct raw_action *raw_actions;
+	struct pointer_action *pointer_actions;
+	struct redact_task *next;
+};
+
+// filled in by program, not user specified
+struct pointer_redact_location {
+	struct pointer_action *pointer_action;
+	unsigned long vaddr;
+	struct pointer_redact_location *next;
+};
+
+// used to find where in the file a given virtual address is
+struct mem_seg {
+	u64 vaddr_start; //inclusive
+	u64 vaddr_end; //exlusive
+	unsigned int file_offset;
+	struct mem_seg *next;
+};
+
 extern int cr_page_server(bool daemon_mode, bool lazy_dump, int cfd);
 
 /*
@@ -19,7 +65,8 @@ struct page_xfer {
 	/* transfers one vaddr:len entry */
 	int (*write_pagemap)(struct page_xfer *self, struct iovec *iov, u32 flags);
 	/* transfers pages related to previous pagemap */
-	int (*write_pages)(struct page_xfer *self, int pipe, unsigned long len);
+	int (*write_pages)(struct page_xfer *self, int pipe, unsigned long len, struct redact_task *redact_tasks,
+			struct pointer_redact_location **prls);
 	void (*close)(struct page_xfer *self);
 
 	/*

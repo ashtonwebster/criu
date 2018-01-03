@@ -21,6 +21,8 @@ ccflags-y		+= -iquote images
 ccflags-y		+= -iquote $(ARCH_DIR)/include
 ccflags-y		+= -iquote .
 ccflags-y		+= -I/usr/include/libnl3
+# AW added
+ccflags-y		+= -I/usr/include/libxml2
 ccflags-y		+= $(COMPEL_UAPI_INCLUDES)
 
 export ccflags-y
@@ -66,6 +68,9 @@ PROGRAM-BUILTINS	+= $(obj)/built-in.o
 PROGRAM-BUILTINS	+= $(ARCH-LIB)
 PROGRAM-BUILTINS	+= soccr/libsoccr.a
 PROGRAM-BUILTINS	+= $(COMPEL_LIBS)
+
+#AW added
+LDFLAGS				+= -lxml2
 
 $(obj)/built-in.o: pie
 	$(Q) $(MAKE) $(call build-as,Makefile.crtools,criu) all

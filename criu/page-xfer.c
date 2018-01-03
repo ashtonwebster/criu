@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
+#include "xml-parse.h"
 #include "types.h"
 #include "cr_options.h"
 #include "servicefd.h"
@@ -23,9 +24,6 @@
 #include "stats.h"
 
 static int page_server_sk = -1;
-
-static u64 pointers_to_redact[10];
-static int num_pointers_to_redact = 0;
 
 struct page_server_iov {
 	u32	cmd;
@@ -148,7 +146,8 @@ static inline int send_psi(int sk, struct page_server_iov *pi)
 
 /* page-server xfer */
 static int write_pages_to_server(struct page_xfer *xfer,
-		int p, unsigned long len)
+		int p, unsigned long len, struct redact_task *redact_tasks,
+		struct pointer_redact_location **prls)
 {
 	pr_debug("Splicing %lu bytes / %lu pages into socket\n", len, len / PAGE_SIZE);
 
@@ -211,20 +210,95 @@ static int open_page_server_xfer(struct page_xfer *xfer, int fd_type, unsigned l
 	return 0;
 }
 
-static void redact(void *page_buffer, unsigned long len) {
-	void *found = (void *)0;
-	found = memmem(page_buffer, len, "awmagic", 8);
-	if (found) {
-		pr_info("awmagic flag found at offset %lu\n", found - page_buffer);
-		strncpy((char *)found, "cigamwa", 8);
-		// copy the pointer in
-		memcpy(&pointers_to_redact[num_pointers_to_redact++], found + 8, 8);
+static int prepare_sample_redact_tasks(struct redact_task **out_redact_tasks) {
+	// TODO: handle ENOMEM
+	// TODO: destroy object
+	*out_redact_tasks = xmalloc(sizeof(struct redact_task));
+	(*out_redact_tasks)->magic_offset = -1;
+	(*out_redact_tasks)->match.magic = "awmagic";
+	(*out_redact_tasks)->match.magic_len = strlen("awmagic") + 1;
+	(*out_redact_tasks)->pointer_actions = xmalloc(sizeof(struct pointer_action));
+	(*out_redact_tasks)->pointer_actions->offset = 8;
+	(*out_redact_tasks)->pointer_actions->replace_bytes = "654321";
+	(*out_redact_tasks)->pointer_actions->len= strlen("654321") + 1;
+	(*out_redact_tasks)->pointer_actions->next = NULL;
+	(*out_redact_tasks)->raw_actions = NULL;
+	// uncomment for test3
+	/*(*out_redact_tasks)->raw_actions = xmalloc(sizeof(struct raw_action));
+	(*out_redact_tasks)->raw_actions->offset = 8;
+	(*out_redact_tasks)->raw_actions->replace_bytes = "654321";
+	(*out_redact_tasks)->raw_actions->rb_len = strlen("654321") + 1;
+	(*out_redact_tasks)->raw_actions->next = NULL;*/
+	(*out_redact_tasks)->next = NULL;
+	return 0;
+}
+
+static int redact_raw(void *page_buffer, void *found_loc, unsigned long buffer_len, 
+		struct redact_task *redact_task) {
+	struct raw_action *cur_action = redact_task->raw_actions;
+	while (cur_action) {
+		// verify offsets are reasonable (within current buffer)
+		if (cur_action->offset + found_loc < page_buffer) {
+			pr_err("replacement before page boundary; offset: %p, page_buffer: %p", 
+					cur_action->offset + found_loc, page_buffer);
+			return -1;
+		}
+		if (cur_action->offset + found_loc + cur_action->rb_len >= page_buffer + buffer_len) {
+			pr_err("replacement extends past page boundary; offset end: %p, page_buffer end: %p",
+					cur_action->offset + found_loc + cur_action->rb_len, page_buffer + buffer_len);
+			return -1;
+		}
+
+		// copy data
+		memcpy(found_loc + cur_action->offset, cur_action->replace_bytes, cur_action->rb_len);
+		cur_action = cur_action->next;
 	}
+	return 0;
+}
+
+static int find_redactions(int pi_fd, void *page_buffer, unsigned long len, struct redact_task *redact_tasks,
+		struct pointer_redact_location **prls) {
+	void *search_start = page_buffer;
+	void *found = (void *)0;
+	struct redact_task *cur_task = redact_tasks;
+	struct pointer_redact_location *prl;
+	while (cur_task) { 
+		search_start = page_buffer;
+		found = memmem(search_start, len, cur_task->match.magic, cur_task->match.magic_len);
+		// keep searching in buffer after first discovery
+		while (found) {
+			// get file offset
+			//cur_task->magic_offset = lseek(pi_fd, 0, SEEK_CUR);
+			pr_info("%s found at offset %lu\n", cur_task->match.magic, found - page_buffer);
+			if (redact_raw(page_buffer, found, len, cur_task)) {
+				return -1;
+			}
+			// get pointer vaddrs 
+			struct pointer_action *cur_pa = cur_task->pointer_actions;
+			while (cur_pa) {
+				// TODO: check bounds of pagebuffer
+				// append vaddr location to front of prls
+				prl = xmalloc(sizeof(struct pointer_redact_location));
+				prl->pointer_action = cur_pa;
+				prl->vaddr = *(u64*)(found + cur_pa->offset);
+				prl->next = *prls;
+				*prls = prl;
+				cur_pa = cur_pa->next;
+			}
+			search_start = found + cur_task->match.magic_len;
+			assert(search_start >= page_buffer && search_start < page_buffer + len);
+			found = memmem(search_start, len - (search_start-page_buffer), 
+					cur_task->match.magic, cur_task->match.magic_len);
+		}
+		cur_task = cur_task->next;
+	}
+	return 0;
 }
 
 /* local xfer */
 static int write_pages_loc(struct page_xfer *xfer,
-		int p, unsigned long len)
+		int p, unsigned long len, struct redact_task *redact_tasks,
+		struct pointer_redact_location **prls)
 {
 	ssize_t ret;
 	ssize_t curr = 0;
@@ -248,11 +322,11 @@ static int write_pages_loc(struct page_xfer *xfer,
 		curr += ret;
 		if (curr == len)
 			break;
-
 	}
 
 	// start redaction here
-	redact(page_buffer, len);
+	find_redactions(img_raw_fd(xfer->pi), page_buffer, len, redact_tasks, 
+			prls);
 
 	// write from userspace buffer to img file
 	if ((ret = write(img_raw_fd(xfer->pi), page_buffer, len)) != len) { 
@@ -260,22 +334,6 @@ static int write_pages_loc(struct page_xfer *xfer,
 		return -1;
 	}
 	xfree(page_buffer);
-	/*
-	while (1) {
-		ret = splice(p, NULL, img_raw_fd(xfer->pi), NULL, len - curr, SPLICE_F_MOVE);
-		if (ret == -1) {
-			pr_perror("Unable to spice data");
-			return -1;
-		}
-		if (ret == 0) {
-			pr_err("A pipe was closed unexpectedly\n");
-			return -1;
-		}
-		curr += ret;
-		if (curr == len)
-			break;
-	}
-	*/
 
 	return 0;
 }
@@ -494,81 +552,58 @@ static inline u32 ppb_xfer_flags(struct page_xfer *xfer, struct page_pipe_buf *p
 	else
 		return PE_PRESENT;
 }
-/*
-static int redact_pointers(struct page_xfer *xfer, struct page_pipe_buf *ppb) {
-	unsigned int i, j;
-	unsigned int file_offset = file_offset_start;
-	unsigned int real_file_offset;
-	unsigned int original_position;
-	u64 pointer;
-	struct iovec iov;
+
+static int redact_pointers(int page_fd, struct pointer_redact_location *prls,
+		struct mem_seg *mem_segs) {
+	struct pointer_redact_location *cur_prl = prls;
+	struct mem_seg *cur_ms = mem_segs;
+	unsigned int original_fp = lseek(page_fd, 0, SEEK_CUR);
 	int ret;
-	for (i = 0; i < num_pointers_to_redact; i++) {
-		pointer = pointers_to_redact[i];
-		// find the correct offset in the file
-		for (j = 0; j < ppb->nr_segs; j++) {
-			iov = ppb->iov[j];
-			// does this VMA contain our pointer address?
-			if (encode_pointer(iov.iov_base) <= pointer &&
-					pointer < encode_pointer(iov.iov_base) + iov.iov_len) {
-				// if yes, seek to the position and write to it
-				real_file_offset = file_offset + (0xfff & pointer);
-				pr_info("cleaning pointer, segment base: %lx len: %d pointer: %p real_file_offset: %x\n", (unsigned long)iov.iov_base, (int)iov.iov_len, 
-						(void *)pointer, real_file_offset);
-				original_position = lseek(img_raw_fd(xfer->pi), 0, SEEK_CUR);
-				lseek(img_raw_fd(xfer->pi), real_file_offset, SEEK_SET);
-				if ((ret = write(img_raw_fd(xfer->pi), "654321", 7)) != 7) {
-					pr_err("should have written 7 bytes but instead wrote %d\n", ret);
-					return -1;
+	int file_offset;
+	// for each prl
+	while (cur_prl) {
+		// for each memory segment
+		cur_ms = mem_segs;
+		while (cur_ms) {
+			// if memory segment contains pointer address
+			//pr_info("checking segment, vaddr start: %llx, vaddr_end: %llx\n",
+			//		(unsigned long long)cur_ms->vaddr_start, (unsigned long long)cur_ms->vaddr_end);
+			if (cur_ms->vaddr_start < cur_prl->vaddr && 
+					cur_prl->vaddr <= cur_ms->vaddr_end) {
+				file_offset = cur_ms->file_offset + (cur_prl->vaddr - cur_ms->vaddr_start);
+				lseek(page_fd, file_offset, SEEK_SET);
+				if ((ret = write(page_fd, cur_prl->pointer_action->replace_bytes, 
+								cur_prl->pointer_action->len)) != cur_prl->pointer_action->len) {
+					pr_err("should have written %d bytes but instead wrote %d\n", 
+							cur_prl->pointer_action->len, ret);
+					return -1;				
 				}
-				// reset to original file position
-				lseek(img_raw_fd(xfer->pi), original_position, SEEK_SET);
+				pr_info("cleaning pointer, len: %d pointer: %llx pointer_offset: %x\n", 
+						cur_prl->pointer_action->len, (unsigned long long)cur_prl->vaddr, 
+						(unsigned int)file_offset);
 			}
-			// in any case increment the offset
-			file_offset += iov.iov_len;
-			pr_info("file_offset: %d\n", file_offset);
+			cur_ms = cur_ms->next;
 		}
-		file_offset = file_offset_start;
+		cur_prl = cur_prl->next;
 	}
-	return 0;
-}
-*/
-static int redact_pointers2(int page_fd, struct iovec iov, unsigned int file_offset) {
-	int i;
-	unsigned int pointer_offset;
-	unsigned int original_position;
-	u64 pointer;
-	int ret;
-	// for each pointer
-	for (i = 0; i < num_pointers_to_redact; i++) {
-		pointer = pointers_to_redact[i];
-		// check if current iov contains pointer
-		if (encode_pointer(iov.iov_base) <= pointer &&
-					pointer < encode_pointer(iov.iov_base) + iov.iov_len) {
-			// if yes, seek to the position and write to it
-			pointer_offset = file_offset + (0xfff & pointer);
-			pr_info("cleaning pointer, segment base: %lx len: %d pointer: %p pointer_offset: %x\n", (unsigned long)iov.iov_base, (int)iov.iov_len, 
-					(void *)pointer, pointer_offset);
-			// save original position in file
-			original_position = lseek(page_fd, 0, SEEK_CUR);
-			lseek(page_fd, pointer_offset, SEEK_SET);
-			if ((ret = write(page_fd, "654321", 7)) != 7) {
-				pr_err("should have written 7 bytes but instead wrote %d\n", ret);
-				return -1;
-			}
-			// reset to original file position
-			lseek(page_fd, original_position, SEEK_SET);
-		}
-	}
+	// restore original fp
+	lseek(page_fd, original_fp, SEEK_SET);
 	return 0;
 }
 
 int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 {
-	unsigned int file_offset_start = 0;
 	struct page_pipe_buf *ppb;
 	unsigned int cur_hole = 0;
 	int ret;
+
+	struct redact_task *redact_tasks;
+	prepare_sample_redact_tasks(&redact_tasks);
+	struct mem_seg *mem_segs = NULL;
+	struct mem_seg *cur_mem_seg, *prev_mem_seg;
+	int first_mem_seg = 1;
+	struct pointer_redact_location *prls = NULL;
+	// TODO: destroy redact tasks and prls
 
 	pr_debug("Transferring pages:\n");
 
@@ -592,17 +627,42 @@ int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 
 			flags = ppb_xfer_flags(xfer, ppb);
 
+
 			if (xfer->write_pagemap(xfer, &iov, flags))
 				return -1;
+
+			// keep track of mapping between virtual address and file offset
+			cur_mem_seg = xmalloc(sizeof(struct mem_seg));
+			cur_mem_seg->vaddr_start = encode_pointer(iov.iov_base);
+			cur_mem_seg->vaddr_end = encode_pointer(iov.iov_base) + iov.iov_len;
+			cur_mem_seg->file_offset = lseek(img_raw_fd(xfer->pi), 0, SEEK_CUR);
+			cur_mem_seg->next = NULL;
+
 			if ((flags & PE_PRESENT) && xfer->write_pages(xfer,
-						ppb->p[0], iov.iov_len))
+						ppb->p[0], iov.iov_len, redact_tasks, &prls))
 				return -1;
-			// redact pointers
-			redact_pointers2(img_raw_fd(xfer->pi), iov, file_offset_start);
-			file_offset_start += iov.iov_len;
+
+			if (first_mem_seg) {
+				first_mem_seg = !first_mem_seg;
+				mem_segs = cur_mem_seg;
+				
+			} else {
+				prev_mem_seg->next = cur_mem_seg;
+			}
+			prev_mem_seg = cur_mem_seg;
 		}
-		// AW: post redaction
-		//if (redact_pointers(xfer, ppb) != 0) return -1;
+	}
+
+	// redact pointers
+	redact_pointers(img_raw_fd(xfer->pi), prls, mem_segs);
+
+	// destroy segs
+	cur_mem_seg = mem_segs;
+	struct mem_seg *prev;
+	while (cur_mem_seg) {
+		prev = cur_mem_seg;
+		cur_mem_seg = cur_mem_seg->next;
+		xfree(prev);
 	}
 
 	return dump_holes(xfer, pp, &cur_hole, NULL);
@@ -807,7 +867,7 @@ static int page_server_add(int sk, struct page_server_iov *pi, u32 flags)
 			return -1;
 		}
 
-		if (lxfer->write_pages(lxfer, cxfer.p[0], chunk))
+		if (lxfer->write_pages(lxfer, cxfer.p[0], chunk, NULL, NULL))
 			return -1;
 
 		len -= chunk;

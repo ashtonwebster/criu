@@ -1,5 +1,6 @@
 This example searches for the string "awmagic" in memory and uses it to find
-the pointer to the printed data (123456).  The pointer is then
+2 pointers with the printed data (123456 and 898989).  The pointers are then replaced
+with 654321.
 
 ```
 git checkout pointer-test
@@ -15,7 +16,8 @@ make pointer-test
 sudo su
 ps -C pointer-test
 pid=<insert pid>
-criu dump -vvvv -o dump.log -t $pid --images-dir imgs4 --shell-job
+mkdir -p imgs
+criu dump -vvvv -o dump.log -t $pid --images-dir imgs --shell-job
 # restoring
 criu restore --images-dir imgs/ --shell-job
 # now resumes printing 654321
