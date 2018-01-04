@@ -13,34 +13,40 @@ struct redact_match {
 	unsigned int magic_len;
 };
 
+#define RAW_TYPE 1
+#define DEREF_TYPE 2
+
 struct raw_action {
+	int type;
 	int offset;
 	char *replace_bytes;
 	unsigned int rb_len;
 	struct raw_action *next;
 };
 
-struct pointer_action {
-	int offset; // offset from magic number
-	// TODO: implement below for arbitrary depth recursive pointers
-	//union { raw_action, pointer_action } 
-	//type 
-	unsigned int len;
-	char *replace_bytes;
-	struct pointer_action *next;
+union post_action {
+	struct raw_action *ra;
+	struct deref_action *da;
+}; // what to do after dereferencing
+
+struct deref_action {
+	int type;
+	int offset; // offset from magic number or previous pointer address
+	union post_action post_action;
+	struct deref_action *next;
 };
 
 struct redact_task {
 	int magic_offset;
 	struct redact_match match;
 	struct raw_action *raw_actions;
-	struct pointer_action *pointer_actions;
+	struct deref_action *deref_actions;
 	struct redact_task *next;
 };
 
 // filled in by program, not user specified
 struct pointer_redact_location {
-	struct pointer_action *pointer_action;
+	struct deref_action *deref_action;
 	unsigned long vaddr;
 	struct pointer_redact_location *next;
 };

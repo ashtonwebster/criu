@@ -217,21 +217,58 @@ static int prepare_sample_redact_tasks(struct redact_task **out_redact_tasks) {
 	(*out_redact_tasks)->magic_offset = -1;
 	(*out_redact_tasks)->match.magic = "awmagic";
 	(*out_redact_tasks)->match.magic_len = strlen("awmagic") + 1;
-	(*out_redact_tasks)->pointer_actions = xmalloc(sizeof(struct pointer_action));
-	(*out_redact_tasks)->pointer_actions->offset = 8;
-	(*out_redact_tasks)->pointer_actions->replace_bytes = "654321";
-	(*out_redact_tasks)->pointer_actions->len= strlen("654321") + 1;
-	(*out_redact_tasks)->pointer_actions->next = NULL;
+
+	(*out_redact_tasks)->deref_actions = xmalloc(sizeof(struct deref_action));
+	(*out_redact_tasks)->deref_actions->type = DEREF_TYPE;
+	(*out_redact_tasks)->deref_actions->offset = 8;
+	(*out_redact_tasks)->deref_actions->next = NULL;
+
+	struct deref_action *da2 = xmalloc(sizeof(struct deref_action));
+	da2->type = DEREF_TYPE;
+	da2->offset = 0;
+	da2->next = NULL;
+
+	struct raw_action *ra = xmalloc(sizeof(struct raw_action));
+	ra->type = RAW_TYPE;
+	ra->offset = 0; //relative to pointer referenced address
+	ra->replace_bytes = "654321";
+	ra->rb_len = strlen("654321") + 1;
+	ra->next = NULL;
+
+	da2->post_action.ra = ra;
+	(*out_redact_tasks)->deref_actions->post_action.da = da2;
+
 	(*out_redact_tasks)->raw_actions = NULL;
-	// uncomment for test3
-	/*(*out_redact_tasks)->raw_actions = xmalloc(sizeof(struct raw_action));
-	(*out_redact_tasks)->raw_actions->offset = 8;
-	(*out_redact_tasks)->raw_actions->replace_bytes = "654321";
-	(*out_redact_tasks)->raw_actions->rb_len = strlen("654321") + 1;
-	(*out_redact_tasks)->raw_actions->next = NULL;*/
 	(*out_redact_tasks)->next = NULL;
 	return 0;
 }
+/*
+static int prepare_sample_redact_tasks(struct redact_task **out_redact_tasks) {
+	// TODO: handle ENOMEM
+	// TODO: destroy object
+	*out_redact_tasks = xmalloc(sizeof(struct redact_task));
+	(*out_redact_tasks)->magic_offset = -1;
+	(*out_redact_tasks)->match.magic = "awmagic";
+	(*out_redact_tasks)->match.magic_len = strlen("awmagic") + 1;
+
+	(*out_redact_tasks)->deref_actions = xmalloc(sizeof(struct deref_action));
+	(*out_redact_tasks)->deref_actions->type = DEREF_TYPE;
+	(*out_redact_tasks)->deref_actions->offset = 8;
+
+	struct raw_action *ra = xmalloc(sizeof(struct raw_action));
+	ra->type = RAW_TYPE;
+	ra->offset = 0; //relative to pointer referenced address
+	ra->replace_bytes = "654321";
+	ra->rb_len = strlen("654321") + 1;
+	ra->next = NULL;
+
+	(*out_redact_tasks)->deref_actions->post_action.ra = ra;
+	(*out_redact_tasks)->deref_actions->next = NULL;
+	(*out_redact_tasks)->raw_actions = NULL;
+	// uncomment for test3
+	(*out_redact_tasks)->next = NULL;
+	return 0;
+}*/
 
 static int redact_raw(void *page_buffer, void *found_loc, unsigned long buffer_len, 
 		struct redact_task *redact_task) {
@@ -274,12 +311,12 @@ static int find_redactions(int pi_fd, void *page_buffer, unsigned long len, stru
 				return -1;
 			}
 			// get pointer vaddrs 
-			struct pointer_action *cur_pa = cur_task->pointer_actions;
+			struct deref_action *cur_pa = cur_task->deref_actions;
 			while (cur_pa) {
 				// TODO: check bounds of pagebuffer
 				// append vaddr location to front of prls
 				prl = xmalloc(sizeof(struct pointer_redact_location));
-				prl->pointer_action = cur_pa;
+				prl->deref_action = cur_pa;
 				prl->vaddr = *(u64*)(found + cur_pa->offset);
 				prl->next = *prls;
 				*prls = prl;
@@ -571,16 +608,40 @@ static int redact_pointers(int page_fd, struct pointer_redact_location *prls,
 			if (cur_ms->vaddr_start < cur_prl->vaddr && 
 					cur_prl->vaddr <= cur_ms->vaddr_end) {
 				file_offset = cur_ms->file_offset + (cur_prl->vaddr - cur_ms->vaddr_start);
-				lseek(page_fd, file_offset, SEEK_SET);
-				if ((ret = write(page_fd, cur_prl->pointer_action->replace_bytes, 
-								cur_prl->pointer_action->len)) != cur_prl->pointer_action->len) {
-					pr_err("should have written %d bytes but instead wrote %d\n", 
-							cur_prl->pointer_action->len, ret);
-					return -1;				
+				// raw action type
+				if (*(int *)cur_prl->deref_action->post_action.ra == RAW_TYPE) {
+					struct raw_action *ra = cur_prl->deref_action->post_action.ra;
+					lseek(page_fd, file_offset + ra->offset, SEEK_SET);
+					if ((ret = write(page_fd, ra->replace_bytes, ra->rb_len)) != ra->rb_len) {
+						pr_err("should have written %d bytes but instead wrote %d\n", 
+								ra->rb_len, ret);
+						return -1;				
+					}
+					pr_info("cleaning pointer, len: %d pointer: %llx pointer_offset: %x\n", 
+							ra->rb_len, (unsigned long long)cur_prl->vaddr, 
+							(unsigned int)file_offset);
 				}
-				pr_info("cleaning pointer, len: %d pointer: %llx pointer_offset: %x\n", 
-						cur_prl->pointer_action->len, (unsigned long long)cur_prl->vaddr, 
-						(unsigned int)file_offset);
+				// deref action type
+				else if (*(int *)cur_prl->deref_action->post_action.da == DEREF_TYPE) {
+					// add another pointer_redact_location to the list after this one
+					struct pointer_redact_location *new_prl;
+					new_prl = xmalloc(sizeof(struct pointer_redact_location));
+					new_prl->deref_action = cur_prl->deref_action->post_action.da;
+					// read in the virtual address of the pointer
+					assert(lseek(page_fd, file_offset, SEEK_SET) == file_offset);
+					pr_info("file offset now %d\n", file_offset);
+					int ret;
+					if ((ret = read(page_fd, &new_prl->vaddr, sizeof(u64))) != sizeof(u64)) {
+						pr_err("incorrect number of bytes read: %d expected %lu, %s\n", ret, sizeof(u64), strerror(errno));
+						return -1;
+					}
+					// insert after current prl and before "next" prl
+					new_prl->next = cur_prl->next;
+					cur_prl->next = new_prl;
+				}
+				// we already found it so we are done with this prl and don't need
+				// to check anymore memory segments
+				break;
 			}
 			cur_ms = cur_ms->next;
 		}
