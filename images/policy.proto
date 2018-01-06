@@ -1,0 +1,26 @@
+syntax = "proto2";
+
+message raw_action_entry {
+	required int32		offset = 1;
+	required string 	replace_bytes= 2;
+}
+
+message redact_match_entry {
+	required string 	magic = 1;
+}
+
+message deref_action_entry {
+	required int32			offset = 1;
+	optional raw_action_entry ra = 2;
+	optional deref_action_entry	da = 3;
+}
+
+message redact_task_entry {
+	required redact_match_entry match = 1;
+	repeated raw_action_entry raw_actions = 2;
+	repeated deref_action_entry deref_actions = 3;
+}
+
+message redact_tasks_entry {
+	repeated redact_task_entry tasks = 1;
+}

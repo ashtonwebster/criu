@@ -1,0 +1,20 @@
+{
+  "tasks": [
+    {
+      "derefActions": [
+        {
+            "ra": {
+                "replaceBytes": "127.1.2.3",
+                "offset": 0
+            },
+            "offset": -24
+        }
+      ],
+      "match": {
+        "magic": "awmagic"
+      },
+      "rawActions": [
+      ]
+    }
+  ]
+}

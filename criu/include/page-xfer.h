@@ -2,6 +2,9 @@
 #define __CR_PAGE_XFER__H__
 #include "pagemap.h"
 
+#define MAX_MAGIC_LEN 1024
+#define MAX_REPLACE_LEN 1024
+
 struct ps_info {
 	int pid;
 	unsigned short port;
@@ -9,7 +12,7 @@ struct ps_info {
 
 // add more to this... such as matching on specific fields
 struct redact_match {
-	char *magic;
+	char magic[1024];
 	unsigned int magic_len;
 };
 
@@ -19,7 +22,7 @@ struct redact_match {
 struct raw_action {
 	int type;
 	int offset;
-	char *replace_bytes;
+	char replace_bytes[1024];
 	unsigned int rb_len;
 	struct raw_action *next;
 };
@@ -37,8 +40,8 @@ struct deref_action {
 };
 
 struct redact_task {
-	int magic_offset;
 	struct redact_match match;
+	// TODO: change names to *_head instead of *_actions
 	struct raw_action *raw_actions;
 	struct deref_action *deref_actions;
 	struct redact_task *next;

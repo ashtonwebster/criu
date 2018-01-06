@@ -332,6 +332,7 @@ int main(int argc, char *argv[], char *envp[])
 		{ "status-fd",			required_argument,	0, 1088 },
 		BOOL_OPT(SK_CLOSE_PARAM, &opts.tcp_close),
 		{ "verbosity",			optional_argument,	0, 'v'	},
+		{ "policy-path", 		required_argument,  0, 1089 },
 		{ },
 	};
 
@@ -624,6 +625,9 @@ int main(int argc, char *argv[], char *envp[])
 		case 'h':
 			usage_error = false;
 			goto usage;
+		case 1089:
+			opts.policy_path = optarg;
+			break;
 		default:
 			goto usage;
 		}
