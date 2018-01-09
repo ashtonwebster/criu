@@ -1,5 +1,6 @@
 syntax = "proto2";
 
+// redaction stuff
 message raw_action_entry {
 	required int32		offset = 1;
 	required string 	replace_bytes= 2;
@@ -21,6 +22,19 @@ message redact_task_entry {
 	repeated deref_action_entry deref_actions = 3;
 }
 
+// assertion
+
+message tcp_assertion {
+	required string			ip = 1;
+	// TODO: add inverse
+	required bool			destroy = 2;
+}
+
 message redact_tasks_entry {
 	repeated redact_task_entry tasks = 1;
+}
+
+message policies {
+	repeated redact_task_entry tasks = 1;
+	repeated tcp_assertion tcp_assertions = 2;
 }

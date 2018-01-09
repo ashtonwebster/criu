@@ -55,6 +55,7 @@
 #include "sysctl.h"
 
 #include "../soccr/soccr.h"
+#include "policy_parse.h"
 
 struct cr_options opts;
 
@@ -626,7 +627,7 @@ int main(int argc, char *argv[], char *envp[])
 			usage_error = false;
 			goto usage;
 		case 1089:
-			opts.policy_path = optarg;
+			opts.policies = optarg == NULL ? NULL : parse_policy(optarg);
 			break;
 		default:
 			goto usage;

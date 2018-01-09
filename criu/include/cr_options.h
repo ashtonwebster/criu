@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "common/config.h"
 #include "common/list.h"
+#include "policy_parse.h"
 
 /*
  * CPU capability options.
@@ -121,7 +122,7 @@ struct cr_options {
 	int			weak_sysctls;
 	int			status_fd;
 	bool			orphan_pts_master;
-	char		*policy_path;
+	struct redact_task *policies;
 };
 
 extern struct cr_options opts;

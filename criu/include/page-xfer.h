@@ -1,50 +1,12 @@
 #ifndef __CR_PAGE_XFER__H__
 #define __CR_PAGE_XFER__H__
 #include "pagemap.h"
+#include "policy_parse.h"
 
-#define MAX_MAGIC_LEN 1024
-#define MAX_REPLACE_LEN 1024
 
 struct ps_info {
 	int pid;
 	unsigned short port;
-};
-
-// add more to this... such as matching on specific fields
-struct redact_match {
-	char magic[1024];
-	unsigned int magic_len;
-};
-
-#define RAW_TYPE 1
-#define DEREF_TYPE 2
-
-struct raw_action {
-	int type;
-	int offset;
-	char replace_bytes[1024];
-	unsigned int rb_len;
-	struct raw_action *next;
-};
-
-union post_action {
-	struct raw_action *ra;
-	struct deref_action *da;
-}; // what to do after dereferencing
-
-struct deref_action {
-	int type;
-	int offset; // offset from magic number or previous pointer address
-	union post_action post_action;
-	struct deref_action *next;
-};
-
-struct redact_task {
-	struct redact_match match;
-	// TODO: change names to *_head instead of *_actions
-	struct raw_action *raw_actions;
-	struct deref_action *deref_actions;
-	struct redact_task *next;
 };
 
 // filled in by program, not user specified
