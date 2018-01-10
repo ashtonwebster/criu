@@ -42,23 +42,12 @@ static struct deref_action *parse_deref_action(DerefActionEntry *pb_da) {
 }
 
 // parse protobuf style task to struct redact_task
-static struct redact_task *read_policy(char *policy_path) {
-	const uint8_t buf[MAX_MESSAGE_SIZE];
-	int real_size;
-	int fd = open(policy_path, O_RDONLY);
+static struct redact_task *parse_tasks(RedactTaskEntry **tasks, int n_tasks) {
 	int i, j;
 	struct redact_task *ret_tasks = NULL, *prev_task = NULL;
-	assert(fd >= 0);
 
-	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) > 0);
-	close(fd);
-	RedactTasksEntry *tasks = 
-		redact_tasks_entry__unpack(NULL, real_size, buf);
-	assert(tasks != 0);
-	pr_info("%s\n", tasks->tasks[0]->match->magic);
-
-	for (i = 0; i < tasks->n_tasks; i++) {
-		RedactTaskEntry *pb_task = tasks->tasks[i];
+	for (i = 0; i < n_tasks; i++) {
+		RedactTaskEntry *pb_task = tasks[i];
 		struct redact_task *parsed_task = malloc(sizeof(struct redact_task));
 		assert(parsed_task);
 		if (i == 0) ret_tasks = parsed_task;
@@ -89,12 +78,25 @@ static struct redact_task *read_policy(char *policy_path) {
 		prev_task = parsed_task;
 		parsed_task->next = NULL;
 	}
-
-	redact_tasks_entry__free_unpacked(tasks, NULL);
 	return ret_tasks;
 }
 
+struct policy *parse_policy(char *policy_path) {
+	const uint8_t buf[MAX_MESSAGE_SIZE];
+	int real_size;
+	int fd = open(policy_path, O_RDONLY);
+	assert(fd >= 0);
 
-struct redact_task *parse_policy(char *policy_path) {
-	return read_policy(policy_path);
+	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) > 0);
+	close(fd);
+	Policy *policy = policy__unpack(NULL, real_size, buf);
+	struct policy *mypolicy = xmalloc(sizeof(struct policy));
+	assert(policy!= 0);
+
+	mypolicy->tasks = parse_tasks(policy->tasks, policy->n_tasks);
+	mypolicy->n_tcp_assertions = policy->n_tcp_assertions;
+	mypolicy->tcp_assertions = policy->tcp_assertions;
+	// free later
+	//policy__free_unpacked(policy, NULL);
+	return mypolicy;
 }

@@ -2,7 +2,7 @@
 #define __POLICY_PARSE_H__
 
 #include "cr_options.h"
-
+#include "images/policy.pb-c.h"
 #define MAX_MAGIC_LEN 1024
 #define MAX_REPLACE_LEN 1024
 
@@ -44,7 +44,20 @@ struct redact_task {
 	struct redact_task *next;
 };
 
-struct redact_task *parse_policy(char *policy_path);
+struct tcp_assertion {
+	char *match_ip;
+	// could add an inverse operation here to match on the non
+	// matching IPs
+	int destroy; // 0 for no destroy, 1 for destroy connection
+};
+
+struct policy {
+	struct redact_task *tasks;
+	TcpAssertion **tcp_assertions;
+	size_t n_tcp_assertions;
+};
+
+struct policy *parse_policy(char *policy_path);
 
 #endif /* __POLICY_PARSE_H__ */
 

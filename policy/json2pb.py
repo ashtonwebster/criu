@@ -9,7 +9,7 @@ if len(sys.argv) != 3:
 with open(sys.argv[1], 'rb') as f:
     jsonstr = f.read()
 
-p = Parse(jsonstr, policy_pb2.redact_tasks_entry())
+p = Parse(jsonstr, policy_pb2.policy())
 
 with open(sys.argv[2], 'wb') as f:
     f.write(p.SerializeToString())

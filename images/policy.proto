@@ -34,7 +34,7 @@ message redact_tasks_entry {
 	repeated redact_task_entry tasks = 1;
 }
 
-message policies {
+message policy {
 	repeated redact_task_entry tasks = 1;
 	repeated tcp_assertion tcp_assertions = 2;
 }

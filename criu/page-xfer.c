@@ -662,7 +662,7 @@ int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 	unsigned int cur_hole = 0;
 	int ret;
 
-	struct redact_task *redact_tasks = opts.policies;
+	struct redact_task *redact_tasks = opts.policy ? opts.policy->tasks : NULL;
 	//prepare_sample_redact_tasks(&redact_tasks);
 	
 	struct mem_seg *mem_segs = NULL;

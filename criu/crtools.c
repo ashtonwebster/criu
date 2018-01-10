@@ -627,7 +627,7 @@ int main(int argc, char *argv[], char *envp[])
 			usage_error = false;
 			goto usage;
 		case 1089:
-			opts.policies = optarg == NULL ? NULL : parse_policy(optarg);
+			opts.policy = optarg == NULL ? NULL : parse_policy(optarg);
 			break;
 		default:
 			goto usage;

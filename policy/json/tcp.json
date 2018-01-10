@@ -1,0 +1,29 @@
+{
+    "tasks": [
+    {
+      "derefActions": [
+        {
+		  "da": {
+            "ra": {
+                "replaceBytes": "654321",
+                "offset": 0
+            },
+            "offset": 0
+          },
+          "offset": 8
+        }
+      ],
+      "match": {
+        "magic": "awmagic"
+      },
+      "rawActions": [
+      ]
+    }
+    ],
+  "tcpAssertions": [
+    {
+      "ip": "127.0.0.1",
+      "destroy": true
+    }
+  ]
+}

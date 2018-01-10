@@ -365,6 +365,8 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 
 	BUG_ON(sk->sd.already_dumped);
 
+	
+
 	ie.id		= id;
 	ie.ino		= sk->sd.ino;
 	ie.family	= family;
@@ -450,6 +452,19 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 	}
 
 	ie.state = sk->state;
+	// decide whether to restore this to closed state
+	if (opts.policy) {
+		int i;
+		unsigned int ip_addr;
+		TcpAssertion *assertion = *opts.policy->tcp_assertions;
+		for (i = 0; i < opts.policy->n_tcp_assertions; i++, assertion++) {
+			assert(inet_pton(AF_INET, assertion->ip, &ip_addr) == 1);
+			if (ip_addr == *sk->dst_addr) {
+				pr_info("found ip address destination %s\n", assertion->ip);
+				ie.state = TCP_CLOSE;
+			}
+		}
+	}
 
 	fe.type = FD_TYPES__INETSK;
 	fe.id = ie.id;
