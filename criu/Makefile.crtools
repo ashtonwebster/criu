@@ -84,6 +84,7 @@ obj-y			+= autofs.o
 obj-y			+= fdstore.o
 obj-y			+= uffd.o
 obj-y			+= policy_parse.o
+obj-y			+= regexgen.o
 
 ifeq ($(VDSO),y)
 obj-y			+= pie-util-vdso.o

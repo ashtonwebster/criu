@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <sched.h>
+#include <time.h>
 
 #include <fcntl.h>
 
@@ -56,6 +57,7 @@
 
 #include "../soccr/soccr.h"
 #include "policy_parse.h"
+
 
 struct cr_options opts;
 
@@ -343,6 +345,7 @@ int main(int argc, char *argv[], char *envp[])
 	BUILD_BUG_ON(CTL_32 != SYSCTL_TYPE__CTL_32);
 	BUILD_BUG_ON(__CTL_STR != SYSCTL_TYPE__CTL_STR);
 
+	srand(time(NULL));
 	if (fault_injection_init())
 		return 1;
 

@@ -22,6 +22,7 @@
 #include "rst_info.h"
 #include "stats.h"
 #include "images/policy.pb-c.h"
+#include "regexgen.h"
 
 
 static int page_server_sk = -1;
@@ -210,66 +211,6 @@ static int open_page_server_xfer(struct page_xfer *xfer, int fd_type, unsigned l
 
 	return 0;
 }
-/*
-static int prepare_sample_redact_tasks(struct redact_task **out_redact_tasks) {
-	// TODO: handle ENOMEM
-	// TODO: destroy object
-	*out_redact_tasks = xmalloc(sizeof(struct redact_task));
-	memcpy((*out_redact_tasks)->match.magic, "awmagic", strlen("awmagic") + 1);
-	(*out_redact_tasks)->match.magic_len = strlen("awmagic") + 1;
-
-	(*out_redact_tasks)->deref_actions = xmalloc(sizeof(struct deref_action));
-	(*out_redact_tasks)->deref_actions->type = DEREF_TYPE;
-	(*out_redact_tasks)->deref_actions->offset = 8;
-	(*out_redact_tasks)->deref_actions->next = NULL;
-
-	struct deref_action *da2 = xmalloc(sizeof(struct deref_action));
-	da2->type = DEREF_TYPE;
-	da2->offset = 0;
-	da2->next = NULL;
-
-	struct raw_action *ra = xmalloc(sizeof(struct raw_action));
-	ra->type = RAW_TYPE;
-	ra->offset = 0; //relative to pointer referenced address
-	memcpy(ra->replace_bytes, "654321", strlen("654321") + 1);
-	ra->rb_len = strlen("654321") + 1;
-	ra->next = NULL;
-
-	da2->post_action.ra = ra;
-	(*out_redact_tasks)->deref_actions->post_action.da = da2;
-
-	(*out_redact_tasks)->raw_actions = NULL;
-	(*out_redact_tasks)->next = NULL;
-	return 0;
-}
-*/
-/*
-static int prepare_sample_redact_tasks(struct redact_task **out_redact_tasks) {
-	// TODO: handle ENOMEM
-	// TODO: destroy object
-	*out_redact_tasks = xmalloc(sizeof(struct redact_task));
-	(*out_redact_tasks)->magic_offset = -1;
-	(*out_redact_tasks)->match.magic = "awmagic";
-	(*out_redact_tasks)->match.magic_len = strlen("awmagic") + 1;
-
-	(*out_redact_tasks)->deref_actions = xmalloc(sizeof(struct deref_action));
-	(*out_redact_tasks)->deref_actions->type = DEREF_TYPE;
-	(*out_redact_tasks)->deref_actions->offset = 8;
-
-	struct raw_action *ra = xmalloc(sizeof(struct raw_action));
-	ra->type = RAW_TYPE;
-	ra->offset = 0; //relative to pointer referenced address
-	ra->replace_bytes = "654321";
-	ra->rb_len = strlen("654321") + 1;
-	ra->next = NULL;
-
-	(*out_redact_tasks)->deref_actions->post_action.ra = ra;
-	(*out_redact_tasks)->deref_actions->next = NULL;
-	(*out_redact_tasks)->raw_actions = NULL;
-	// uncomment for test3
-	(*out_redact_tasks)->next = NULL;
-	return 0;
-}*/
 
 static int redact_raw(void *page_buffer, void *found_loc, unsigned long buffer_len, 
 		struct redact_task *redact_task) {
@@ -288,7 +229,9 @@ static int redact_raw(void *page_buffer, void *found_loc, unsigned long buffer_l
 		}
 
 		// copy data
-		memcpy(found_loc + cur_action->offset, cur_action->replace_bytes, cur_action->rb_len);
+		char random_bytes[1024];
+		generate_random(cur_action->replace_bytes, random_bytes, 1024);
+		memcpy(found_loc + cur_action->offset, random_bytes, cur_action->rb_len);
 		cur_action = cur_action->next;
 	}
 	return 0;
@@ -615,7 +558,9 @@ static int redact_pointers(int page_fd, struct pointer_redact_location *prls,
 				if (*(int *)cur_prl->deref_action->post_action.ra == RAW_TYPE) {
 					struct raw_action *ra = cur_prl->deref_action->post_action.ra;
 					lseek(page_fd, file_offset + ra->offset, SEEK_SET);
-					if ((ret = write(page_fd, ra->replace_bytes, ra->rb_len)) != ra->rb_len) {
+					char random_bytes[1024];
+					generate_random(ra->replace_bytes, random_bytes, 1024);
+					if ((ret = write(page_fd, random_bytes, strlen(random_bytes)+1)) != ra->rb_len) {
 						pr_err("should have written %d bytes but instead wrote %d\n", 
 								ra->rb_len, ret);
 						return -1;				
