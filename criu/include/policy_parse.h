@@ -55,6 +55,7 @@ struct policy {
 	struct redact_task *tasks;
 	TcpAssertion **tcp_assertions;
 	size_t n_tcp_assertions;
+	ProcessOmitMatches *process_omit_matches;
 };
 
 struct policy *parse_policy(char *policy_path);

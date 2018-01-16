@@ -26,15 +26,68 @@ message redact_task_entry {
 
 message tcp_assertion {
 	required string			ip = 1;
-	// TODO: add inverse
-	required bool			destroy = 2;
 }
 
 message redact_tasks_entry {
 	repeated redact_task_entry tasks = 1;
 }
 
+/*enum omit_match_types {
+	NO_CHILDREN = 0;
+	EXE_NAME_EQ = 1;
+	EXE_SAME_AS_PARENT = 2;
+	FILE_EQ = 3;
+	TCP_DEST_IP_EQ = 4;
+	MAGIC_NUM_EQ = 5;
+}*/
+
+enum encoding_types {
+	ASCII = 0;
+	HEX = 1;
+}
+
+// matches --------
+
+message no_children_match {
+	optional bool inverse = 1 [ default = false];
+}
+
+message exe_name_match {
+	required string match_str = 1;
+	optional bool inverse = 2 [default = false];
+}
+
+message exe_same_as_parent_match {
+	optional bool inverse = 1 [default = false];
+}
+
+message file_match {
+	required string match_str = 1;
+	optional bool inverse = 2 [default = false];
+}
+
+message tcp_dest_ip_match {
+	required string match_str = 1;
+	optional bool inverse = 2 [default = false];
+}
+
+message magic_num_match {
+	required string match_str = 1;
+	optional encoding_types encoding = 2;
+	optional bool inverse = 3 [default = false];
+}
+
+message process_omit_matches {
+	repeated no_children_match no_children_matches = 2;
+	repeated exe_name_match exe_name_matches = 3;
+	repeated exe_same_as_parent_match exe_same_as_parent_matches = 4;
+	repeated file_match file_matches = 5;
+	repeated tcp_dest_ip_match tcp_dest_ip_matches = 6;
+	repeated magic_num_match magic_num_matches = 7;
+}
+
 message policy {
 	repeated redact_task_entry tasks = 1;
 	repeated tcp_assertion tcp_assertions = 2;
+	required process_omit_matches process_omit_matches = 3;
 }

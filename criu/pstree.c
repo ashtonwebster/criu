@@ -17,6 +17,8 @@
 #include "protobuf.h"
 #include "images/pstree.pb-c.h"
 #include "crtools.h"
+#include "images/mm.pb-c.h"
+#include "mem.h"
 
 struct pstree_item *root_item;
 static struct rb_root pid_root_rb;
@@ -481,7 +483,7 @@ static int read_pstree_ids(struct pstree_item *pi)
 
 static int read_pstree_image(pid_t *pid_max)
 {
-	int ret = 0, i;
+	int ret = 0, i; //first = 1;
 	struct cr_img *img;
 	struct pstree_item *pi;
 
@@ -494,15 +496,34 @@ static int read_pstree_image(pid_t *pid_max)
 	while (1) {
 		PstreeEntry *e;
 
+		// AW added to prevent other children from loading
+		/*if (first) {
+			first = 0;
+		} else {
+			break;
+		}*/
+
 		ret = pb_read_one_eof(img, &e, PB_PSTREE);
+
 		if (ret <= 0)
 			break;
 
 		ret = -1;
 		pi = lookup_create_item(e->pid);
+
 		if (pi == NULL)
 			break;
 		BUG_ON(pi->pid->state != TASK_UNDEF);
+
+
+		// read mm to check executable ID
+		/*prepare_mm_pid(pi);
+		prepare_fd_pid(pi);
+		prepare_files();
+		if ("/some/executable" == reg_file_path(find_file_desc_raw(FD_TYPES__REG, 
+					rsti(pi)->mm->exe_file_id), NULL, 0)) {
+			continue;
+		}*/
 
 		/*
 		 * All pids should be added in the tree to be able to find

@@ -452,8 +452,12 @@ static int collect_children(struct pstree_item *item)
 	int ret, i, nr_children, nr_inprogress;
 
 	ret = parse_children(item->pid->real, &ch, &nr_children);
-	if (ret < 0)
+	if (ret < 0) {
 		return ret;
+	// aw added to skip all children
+	} //else {
+	//	return 0;
+	//}
 
 	nr_inprogress = 0;
 	for (i = 0; i < nr_children; i++) {
