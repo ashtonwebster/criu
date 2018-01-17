@@ -19,9 +19,65 @@
 #include "crtools.h"
 #include "images/mm.pb-c.h"
 #include "mem.h"
+#include "files-reg.h"
+
+#define FILE_NOT_FOUND 24
 
 struct pstree_item *root_item;
 static struct rb_root pid_root_rb;
+
+int check_files(struct pstree_item* item) {
+	int ret = 0;
+	struct cr_img *img;
+
+	if (item->ids == NULL) {/* zombie */
+		pr_info("no ids for item with pid=%d\n", item->pid->real);
+		return -1;
+	}
+
+	if (rsti(item)->fdt && rsti(item)->fdt->pid != vpid(item)) {
+		pr_info("fdt not present for pid=%d\n", item->pid->real);
+		return -1;
+	}
+
+	img = open_image(CR_FD_FDINFO, O_RSTR, item->ids->files_id);
+	if (!img)
+		return -1;
+
+	while (1) {
+		FdinfoEntry *e;
+
+		ret = pb_read_one_eof(img, &e, PB_FDINFO);
+		if (ret <= 0)
+			break;
+
+		assert(e);
+		if (e->type == FD_TYPES__REG) {
+			char path[1024];
+			path[0] = '/'; // first char is opening slash
+			path[1] = '\0'; // null terminate
+			char *path_end = reg_file_path(
+					find_file_desc_raw(FD_TYPES__REG, e->id), 
+					NULL, 
+					0);
+			strcat(path, path_end); // append starting slash to path
+			if (access( path, F_OK ) == -1) {
+				pr_info("need to remove pid %d\n", vpid(item));
+                return FILE_NOT_FOUND;
+			}
+		}
+
+		if (ret < 0) {
+			fdinfo_entry__free_unpacked(e, NULL);
+			break;
+		}
+	}
+
+	close_image(img);
+	return ret;
+}
+
+
 
 void core_entry_free(CoreEntry *core)
 {
@@ -290,7 +346,7 @@ int dump_pstree(struct pstree_item *root_item)
 	if (vpid(root_item) != root_item->sid) {
 		if (!opts.shell_job) {
 			pr_err("The root process %d is not a session leader. "
-			       "Consider using --" OPT_SHELL_JOB " option\n", vpid(item));
+				   "Consider using --" OPT_SHELL_JOB " option\n", vpid(item));
 			return -1;
 		}
 	}
@@ -492,6 +548,8 @@ static int read_pstree_image(pid_t *pid_max)
 	img = open_image(CR_FD_PSTREE, O_RSTR);
 	if (!img)
 		return -1;
+	// AW added
+	assert(!prepare_files());
 
 	while (1) {
 		PstreeEntry *e;
@@ -516,14 +574,17 @@ static int read_pstree_image(pid_t *pid_max)
 		BUG_ON(pi->pid->state != TASK_UNDEF);
 
 
-		// read mm to check executable ID
-		/*prepare_mm_pid(pi);
-		prepare_fd_pid(pi);
-		prepare_files();
-		if ("/some/executable" == reg_file_path(find_file_desc_raw(FD_TYPES__REG, 
-					rsti(pi)->mm->exe_file_id), NULL, 0)) {
-			continue;
-		}*/
+		assert(!read_pstree_ids(pi));
+        ret = check_files(pi);
+        pi->ids = NULL;
+        if (ret < 0) {
+            break;
+        } else if (ret == FILE_NOT_FOUND) {
+            // skip this child
+            continue;
+        }
+        //undo read_pstree_ids
+
 
 		/*
 		 * All pids should be added in the tree to be able to find
@@ -550,7 +611,7 @@ static int read_pstree_image(pid_t *pid_max)
 		if (e->ppid == 0) {
 			if (root_item) {
 				pr_err("Parent missed on non-root task "
-				       "with pid %d, image corruption!\n", e->pid);
+					   "with pid %d, image corruption!\n", e->pid);
 				goto err;
 			}
 			root_item = pi;
@@ -603,6 +664,14 @@ static int read_pstree_image(pid_t *pid_max)
 		if (ret < 0)
 			goto err;
 	}
+    // AW: resets prepared files
+    /*init_fdesc_hash();
+    files_cinfo.fd_type = CR_FD_FILES;
+    files_cinfo.pb_type = PB_FILE;
+    files_cinfo.priv_size = 0;
+    files_cinfo.collect = collect_one_file;
+    files_cinfo.flags = COLLECT_NOFREE;*/
+
 
 err:
 	close_image(img);

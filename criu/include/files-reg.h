@@ -56,4 +56,7 @@ extern int strip_deleted(struct fd_link *link);
 
 extern int dead_pid_conflict(void);
 
+char *reg_file_path(struct file_desc *d, char *buf, size_t s);
+
+
 #endif /* __CR_FILES_REG_H__ */

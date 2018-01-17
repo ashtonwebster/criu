@@ -10,6 +10,7 @@
 #include "common/list.h"
 #include "pid.h"
 #include "rst_info.h"
+#include "protobuf.h"
 
 #include "images/fdinfo.pb-c.h"
 #include "images/fown.pb-c.h"
@@ -90,6 +91,10 @@ struct fdinfo_list_entry {
 	u8			stage:3;
 	u8			fake:1;
 };
+
+void init_fdesc_hash(void);
+
+int collect_one_file(void *o, ProtobufCMessage *base, struct cr_img *i);
 
 /* reports whether fd_a takes prio over fd_b */
 static inline int fdinfo_rst_prio(struct fdinfo_list_entry *fd_a, struct fdinfo_list_entry *fd_b)

@@ -1885,7 +1885,7 @@ static int open_fe_fd(struct file_desc *fd, int *new_fd)
 	return 0;
 }
 
-static char *reg_file_path(struct file_desc *d, char *buf, size_t s)
+char *reg_file_path(struct file_desc *d, char *buf, size_t s)
 {
 	struct reg_file_info *rfi;
 

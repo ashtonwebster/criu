@@ -236,8 +236,10 @@ static int restore_finish_ns_stage(int from, int to)
 
 static int crtools_prepare_shared(void)
 {
-	if (prepare_files())
-		return -1;
+	// skipping prepare files because this was already
+	// done in read_pstree_image
+	//if (prepare_files())
+	//	return -1;
 
 	/* We might want to remove ghost files on failed restore */
 	if (collect_remaps_and_regfiles())
@@ -1659,8 +1661,9 @@ static int restore_task_with_children(void *_arg)
 			goto err;
 	}
 
-	if (restore_one_task(vpid(current), ca->core))
+	if (restore_one_task(vpid(current), ca->core)) {
 		goto err;
+    }
 
 	return 0;
 

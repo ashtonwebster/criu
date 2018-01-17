@@ -79,5 +79,5 @@ The project is licensed under GPLv2 (though files sitting in the lib/ directory 
 Note: full install command: 
 
 ```
-sudo apt-get install --no-install-recommends libprotobuf-dev libprotobuf-c0-dev protobuf-c-compiler protobuf-compiler python-protobuf pkg-config python-ipaddr iproute2 libcap-dev libnl-3-dev libnet-dev asciidoc xmlto
+sudo apt-get install --no-install-recommends libprotobuf-dev libprotobuf-c0-dev protobuf-c-compiler protobuf-compiler python-protobuf pkg-config python-ipaddr iproute2 libcap-dev libnl-3-dev libnet-dev asciidoc xmlto libxml2-dev
 ```

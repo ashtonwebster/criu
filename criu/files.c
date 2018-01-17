@@ -57,7 +57,7 @@ static struct hlist_head file_desc_hash[FDESC_HASH_SIZE];
 /* file_desc's, which fle is not owned by a process, that is able to open them */
 static LIST_HEAD(fake_master_head);
 
-static void init_fdesc_hash(void)
+void init_fdesc_hash(void)
 {
 	int i;
 
@@ -1782,7 +1782,7 @@ static int collect_one_file_entry(FileEntry *fe, u_int32_t id, ProtobufCMessage 
 	return collect_entry(base, cinfo);
 }
 
-static int collect_one_file(void *o, ProtobufCMessage *base, struct cr_img *i)
+int collect_one_file(void *o, ProtobufCMessage *base, struct cr_img *i)
 {
 	int ret = 0;
 	FileEntry *fe;

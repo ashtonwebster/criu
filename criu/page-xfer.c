@@ -611,7 +611,7 @@ int page_xfer_dump_pages(struct page_xfer *xfer, struct page_pipe *pp)
 	//prepare_sample_redact_tasks(&redact_tasks);
 	
 	struct mem_seg *mem_segs = NULL;
-	struct mem_seg *cur_mem_seg, *prev_mem_seg;
+	struct mem_seg *cur_mem_seg = NULL, *prev_mem_seg = NULL;
 	int first_mem_seg = 1;
 	struct pointer_redact_location *prls = NULL;
 	// TODO: destroy redact tasks and prls
