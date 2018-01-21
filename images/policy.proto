@@ -46,6 +46,17 @@ enum encoding_types {
 	HEX = 1;
 }
 
+// omitted processes ----------
+
+message omitted_process {
+	required int32		pid = 1;	
+	required string 	reason = 2;
+}
+
+message omitted_processes {
+	repeated omitted_process omitted_processes = 1;
+}
+
 // matches --------
 
 message no_children_match {
@@ -78,12 +89,12 @@ message magic_num_match {
 }
 
 message process_omit_matches {
-	repeated no_children_match no_children_matches = 2;
-	repeated exe_name_match exe_name_matches = 3;
-	repeated exe_same_as_parent_match exe_same_as_parent_matches = 4;
-	repeated file_match file_matches = 5;
-	repeated tcp_dest_ip_match tcp_dest_ip_matches = 6;
-	repeated magic_num_match magic_num_matches = 7;
+	repeated no_children_match no_children_matches = 1;
+	repeated exe_name_match exe_name_matches = 2;
+	repeated exe_same_as_parent_match exe_same_as_parent_matches = 3;
+	repeated file_match file_matches = 4;
+	repeated tcp_dest_ip_match tcp_dest_ip_matches = 5;
+	repeated magic_num_match magic_num_matches = 6;
 }
 
 message policy {

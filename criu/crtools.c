@@ -57,6 +57,7 @@
 
 #include "../soccr/soccr.h"
 #include "policy_parse.h"
+#include "images/policy.pb-c.h"
 
 
 struct cr_options opts;
@@ -346,6 +347,7 @@ int main(int argc, char *argv[], char *envp[])
 	BUILD_BUG_ON(__CTL_STR != SYSCTL_TYPE__CTL_STR);
 
 	srand(time(NULL));
+	init_omitted_processes();
 	if (fault_injection_init())
 		return 1;
 

@@ -1299,6 +1299,10 @@ int dump_one_reg_file(int lfd, u32 id, const struct fd_parms *p)
 	if (check_path_remap(link, p, lfd, id, nsid))
 		return -1;
 	rfe.name	= &link->name[1];
+	reg_file_map[id] = malloc(strlen(rfe.name) + 1);
+	strncpy(reg_file_map[id], rfe.name,
+			strlen(rfe.name) + 1);
+
 ext:
 	rfe.id		= id;
 	rfe.flags	= p->flags;
@@ -1315,6 +1319,7 @@ ext:
 	fe.type = FD_TYPES__REG;
 	fe.id = rfe.id;
 	fe.reg = &rfe;
+
 
 	rimg = img_from_set(glob_imgset, CR_FD_FILES);
 	return pb_write_one(rimg, &fe, PB_FILE);

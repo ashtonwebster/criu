@@ -539,9 +539,10 @@ static int read_pstree_ids(struct pstree_item *pi)
 
 static int read_pstree_image(pid_t *pid_max)
 {
-	int ret = 0, i; //first = 1;
+	int ret = 0, i, j, should_skip = 0; //first = 1;
 	struct cr_img *img;
 	struct pstree_item *pi;
+	OmittedProcess *op;
 
 	pr_info("Reading image tree\n");
 
@@ -550,9 +551,11 @@ static int read_pstree_image(pid_t *pid_max)
 		return -1;
 	// AW added
 	assert(!prepare_files());
+	OmittedProcesses *op_list = read_omitted_porcesses();
 
 	while (1) {
 		PstreeEntry *e;
+		should_skip = 0;
 
 		// AW added to prevent other children from loading
 		/*if (first) {
@@ -573,7 +576,7 @@ static int read_pstree_image(pid_t *pid_max)
 			break;
 		BUG_ON(pi->pid->state != TASK_UNDEF);
 
-
+		//AW added
 		assert(!read_pstree_ids(pi));
         ret = check_files(pi);
         pi->ids = NULL;
@@ -583,7 +586,24 @@ static int read_pstree_image(pid_t *pid_max)
             // skip this child
             continue;
         }
-        //undo read_pstree_ids
+
+		// AW: check if process in omitted list
+		if (op_list != NULL) {
+			// for each process in omitted list
+			for (j = 0, op = op_list->omitted_processes[0]; 
+					j < op_list->n_omitted_processes; 
+					j++, op = op_list->omitted_processes[j]) {
+				if (op->pid == vpid(pi)) {
+					should_skip = 1;
+					break;
+				}
+			}
+		}
+
+		if (should_skip) {
+			// skip list in omitted processes
+			continue;
+		}
 
 
 		/*

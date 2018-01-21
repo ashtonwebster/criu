@@ -26,6 +26,11 @@
 #include "sk-inet.h"
 #include "protobuf.h"
 #include "util.h"
+#include "restore.h"
+#include "images/policy.pb-c.h"
+#include "pstree.h"
+#include "policy_parse.h"
+#include "dump.h"
 
 #define PB_ALEN_INET	1
 #define PB_ALEN_INET6	4
@@ -452,8 +457,30 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 	}
 
 	ie.state = sk->state;
+
 	// decide whether to restore this to closed state
-	if (opts.policy) {
+	// NOTE: only works for ipv4 addresses
+	if (opts.policy && ie.family == AF_INET) {
+		int i, n;
+		unsigned int ip_addr;
+		TcpDestIpMatch *tcp_dest_match = 
+			opts.policy->process_omit_matches->tcp_dest_ip_matches[0];
+		n = opts.policy->process_omit_matches->n_tcp_dest_ip_matches;
+		for (i = 0; i < n; i++, tcp_dest_match++) {
+			assert(inet_pton(AF_INET, tcp_dest_match->match_str, &ip_addr) == 1);
+			if (ip_addr == *sk->dst_addr) {
+				// add to list of processes to not restore
+				char reason[1024];
+				sprintf(reason, "omitting process %d for TCP dest IP matching %s\n",
+						global_item->pid->real, tcp_dest_match->match_str);
+				pr_info("%s", reason);
+				add_omitted_process(global_item->pid->real, reason);
+				break;
+			}
+		}
+
+	}
+	/*if (opts.policy) {
 		int i;
 		unsigned int ip_addr;
 		TcpAssertion *assertion = *opts.policy->tcp_assertions;
@@ -464,7 +491,7 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 				ie.state = TCP_CLOSE;
 			}
 		}
-	}
+	}*/
 
 	fe.type = FD_TYPES__INETSK;
 	fe.id = ie.id;

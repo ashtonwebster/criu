@@ -7,23 +7,33 @@ if (len(sys.argv) != 3) :
     sys.exit(-1)
 
 policy = policy_pb2.policy()
-rt = policy.tasks.add()
-rt.match.magic = "abc123"
 
-ra = rt.raw_actions.add()
-ra.offset = 4
-ra.replace_bytes = "abcdef"
+tcp = policy.process_omit_matches.tcp_dest_ip_matches.add()
+tcp.match_str = "127.0.0.1"
 
-da1 = rt.deref_actions.add()
-da1.offset = 8
-da1.da.offset = 0
-da1.da.da.offset = 0
-da1.da.da.ra.offset = 0
-da1.da.da.ra.replace_bytes = "5678"
+f_match = policy.process_omit_matches.file_matches.add()
+f_match.match_str = "/home/ashton/criu/examples/missing_file/a.txt"
 
-ta = policy.tcp_assertions.add()
-ta.ip = "192.168.1.1"
-ta.destroy = True
+exe_match = policy.process_omit_matches.exe_name_matches.add()
+exe_match.match_str = "/bin/sleep"
+
+#rt = policy.tasks.add()
+#rt.match.magic = "abc123"
+
+#ra = rt.raw_actions.add()
+#ra.offset = 4
+#ra.replace_bytes = "abcdef"
+
+#da1 = rt.deref_actions.add()
+#da1.offset = 8
+#da1.da.offset = 0
+#da1.da.da.offset = 0
+#da1.da.da.ra.offset = 0
+#da1.da.da.ra.replace_bytes = "5678"
+
+#ta = policy.tcp_assertions.add()
+#ta.ip = "192.168.1.1"
+#ta.destroy = True
 
 jsonObj = MessageToJson(policy)
 print(jsonObj)

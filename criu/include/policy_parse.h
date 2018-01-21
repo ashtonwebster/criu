@@ -58,7 +58,12 @@ struct policy {
 	ProcessOmitMatches *process_omit_matches;
 };
 
+void init_omitted_processes();
+OmittedProcesses *read_omitted_porcesses(void);
+int add_omitted_process(int pid, char *reason);
+int dump_omitted_processes();
 struct policy *parse_policy(char *policy_path);
+
 
 #endif /* __POLICY_PARSE_H__ */
 

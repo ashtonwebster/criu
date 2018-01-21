@@ -57,6 +57,9 @@ static struct hlist_head file_desc_hash[FDESC_HASH_SIZE];
 /* file_desc's, which fle is not owned by a process, that is able to open them */
 static LIST_HEAD(fake_master_head);
 
+// mapping from reg file id to file path
+char *reg_file_map[1024];
+
 void init_fdesc_hash(void)
 {
 	int i;
@@ -573,7 +576,7 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 {
 	int *lfds = NULL;
 	struct cr_img *img = NULL;
-	struct fd_opts *opts = NULL;
+	struct fd_opts *fd_opts = NULL;
 	int i, ret = -1;
 	int off, nr_fds = min((int) PARASITE_MAX_FDS, dfds->nr_fds);
 
@@ -585,8 +588,8 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 	if (!lfds)
 		goto err;
 
-	opts = xmalloc(nr_fds * sizeof(struct fd_opts));
-	if (!opts)
+	fd_opts = xmalloc(nr_fds * sizeof(struct fd_opts));
+	if (!fd_opts)
 		goto err;
 
 	img = open_image(CR_FD_FDINFO, O_DUMP, item->ids->files_id);
@@ -599,7 +602,7 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 			nr_fds = dfds->nr_fds - off;
 
 		ret = parasite_drain_fds_seized(ctl, dfds, nr_fds,
-							off, lfds, opts);
+							off, lfds, fd_opts);
 		if (ret)
 			goto err;
 
@@ -607,7 +610,7 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 			FdinfoEntry e = FDINFO_ENTRY__INIT;
 
 			ret = dump_one_file(item->pid, dfds->fds[i + off],
-						lfds[i], opts + i, ctl, &e);
+						lfds[i], fd_opts + i, ctl, &e);
 			close(lfds[i]);
 			if (ret)
 				break;
@@ -615,6 +618,28 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 			ret = pb_write_one(img, &e, PB_FDINFO);
 			if (ret)
 				break;
+
+			// AW: check if it is a file we don't want to restore
+			if (opts.policy && e.type == FD_TYPES__REG) { 
+				/*reg_file_list[n_reg_files++] = e.id;*/
+				assert(reg_file_map[e.id]);
+				int j;
+				FileMatch *file_match;
+				for (j = 0, file_match = opts.policy->process_omit_matches->file_matches[0]; 
+						j < opts.policy->process_omit_matches->n_file_matches;
+						j++, file_match++) {
+					if (strcmp(reg_file_map[e.id], file_match->match_str) == 0) {
+						// add to omit process list
+						char reason[1024];
+						sprintf(reason, "omitting process %d for file match %s\n",
+								item->pid->real, file_match->match_str);
+						pr_info("%s", reason);
+						add_omitted_process(item->pid->real, reason);
+						break;
+					}
+				}
+
+			}
 		}
 	}
 
@@ -622,7 +647,7 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 err:
 	if (img)
 		close_image(img);
-	xfree(opts);
+	xfree(fd_opts);
 	xfree(lfds);
 	return ret;
 }

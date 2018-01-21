@@ -83,6 +83,8 @@
 #include "fault-injection.h"
 #include "dump.h"
 
+
+
 /*
  * Architectures can overwrite this function to restore register sets that
  * are not covered by ptrace_set/get_regs().
@@ -98,6 +100,8 @@ int __attribute__((weak)) arch_set_thread_regs(struct pstree_item *item,
 }
 
 static char loc_buf[PAGE_SIZE];
+// used to expose pid currently being dumped
+struct pstree_item *global_item = NULL;
 
 void free_mappings(struct vm_area_list *vma_area_list)
 {
@@ -283,6 +287,26 @@ static int dump_task_exe_link(pid_t pid, MmEntry *mm)
 	ret = dump_one_reg_file_cond(fd, &mm->exe_file_id, &params);
 
 	close(fd);
+
+	// AW: check for exe_name_match
+	if (opts.policy) {
+		assert(reg_file_map[mm->exe_file_id]);
+		ExeNameMatch *exe_name_match;
+		int i;
+		for (i = 0, exe_name_match = opts.policy->process_omit_matches->exe_name_matches[0];
+				i < opts.policy->process_omit_matches->n_exe_name_matches;
+				i++, exe_name_match++) { 
+			if (strcmp(reg_file_map[mm->exe_file_id], exe_name_match->match_str) == 0) {
+				char reason[1024];
+				sprintf(reason, "omitting process %d for exe filename match %s\n",
+						pid, exe_name_match->match_str);
+				pr_info("%s", reason);
+				add_omitted_process(pid, reason);
+				break;
+			}
+		}
+
+	}
 	return ret;
 }
 
@@ -1704,6 +1728,9 @@ static int cr_dump_finish(int ret)
 	free_userns_maps();
 
 	close_service_fd(CR_PROC_FD_OFF);
+	
+	// AW: dump omitted processes
+	dump_omitted_processes();
 
 	if (ret) {
 		pr_err("Dumping FAILED.\n");
@@ -1717,7 +1744,7 @@ static int cr_dump_finish(int ret)
 int cr_dump_tasks(pid_t pid)
 {
 	InventoryEntry he = INVENTORY_ENTRY__INIT;
-	struct pstree_item *item;
+	//struct pstree_item *item;
 	int pre_dump_ret = 0;
 	int ret = -1;
 
@@ -1804,8 +1831,8 @@ int cr_dump_tasks(pid_t pid)
 	if (collect_seccomp_filters() < 0)
 		goto err;
 
-	for_each_pstree_item(item) {
-		if (dump_one_task(item))
+	for_each_pstree_item(global_item) {
+		if (dump_one_task(global_item))
 			goto err;
 	}
 

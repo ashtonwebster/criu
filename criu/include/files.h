@@ -16,6 +16,8 @@
 #include "images/fown.pb-c.h"
 #include "images/vma.pb-c.h"
 
+extern char *reg_file_map[1024];
+
 struct pstree_item;
 struct file_desc;
 struct cr_imgset;

@@ -8,6 +8,65 @@
 #include "cr_options.h"
 
 #define MAX_MESSAGE_SIZE 1024
+#define MAX_OMITTED_PROCESSES 1024
+#define OMIT_IMG_FILENAME "omit.img"
+
+static OmittedProcesses omitted_processes;
+
+void init_omitted_processes() {
+	OmittedProcesses my_omitted_processes = OMITTED_PROCESSES__INIT;
+	omitted_processes = my_omitted_processes;
+	omitted_processes.n_omitted_processes = 0;
+	omitted_processes.omitted_processes = 
+		calloc(sizeof(OmittedProcess *), MAX_OMITTED_PROCESSES);
+	assert(omitted_processes.omitted_processes);
+}
+
+int add_omitted_process(int pid, char *reason) {
+	OmittedProcess *new_op = xmalloc(sizeof(OmittedProcess));
+	OmittedProcess init_op = OMITTED_PROCESS__INIT;
+	memcpy(new_op, &init_op, sizeof(OmittedProcess));
+	omitted_processes.omitted_processes[omitted_processes.n_omitted_processes] =
+		new_op;
+	new_op->pid = pid;
+	new_op->reason = reason;
+	omitted_processes.n_omitted_processes++;
+	return 0;
+}
+
+int dump_omitted_processes() {
+	size_t len = omitted_processes__get_packed_size(&omitted_processes);
+	void *buf = malloc(len);
+	omitted_processes__pack(&omitted_processes, buf);
+	// write to file
+	//char *filename = "omit.img";
+	//memset(filename, '\0', 1024);
+	//strcat(filename, opts.work_dir ? opts.work_dir : "./");
+	//strcat(filename, "omit.img");
+	int fd = open(OMIT_IMG_FILENAME, O_WRONLY | O_CREAT, 0644);
+	if (fd < 0) {
+		pr_info("could not open %s, fd=%d\n", OMIT_IMG_FILENAME, fd);
+		assert(fd >= 0);
+	}
+	assert(write(fd, buf, len) == len);
+	close(fd);
+	free(buf);
+	return 0;
+}
+
+OmittedProcesses *read_omitted_porcesses(void) {
+	const uint8_t buf[MAX_MESSAGE_SIZE];
+	int real_size;
+	int fd = open(OMIT_IMG_FILENAME, O_RDONLY);
+	if (fd < 0) {
+		pr_info("No omitted processes\n");
+		return NULL;
+	}
+
+	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) >0);
+	close(fd);
+	return omitted_processes__unpack(NULL, real_size, buf);
+}
 
 static struct raw_action *parse_raw_action(RawActionEntry *pb_ra) {
 	struct raw_action *parsed_ra = xmalloc(sizeof(struct raw_action));
@@ -96,6 +155,7 @@ struct policy *parse_policy(char *policy_path) {
 	mypolicy->tasks = parse_tasks(policy->tasks, policy->n_tasks);
 	mypolicy->n_tcp_assertions = policy->n_tcp_assertions;
 	mypolicy->tcp_assertions = policy->tcp_assertions;
+	mypolicy->process_omit_matches = policy->process_omit_matches;
 	// free later
 	//policy__free_unpacked(policy, NULL);
 	return mypolicy;
