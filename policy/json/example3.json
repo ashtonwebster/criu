@@ -1,0 +1,14 @@
+{
+  "processOmitMatches": {
+    "tcpDestIpMatches": [
+      {
+        "matchStr": "127.0.0.1"
+      }
+    ], 
+    "fileMatches": [
+      {
+        "matchStr": "/home/ashton/criu/examples/missing_file/a.txt"
+      }
+    ]
+  }
+}
