@@ -23,6 +23,7 @@
 #include "stats.h"
 #include "images/policy.pb-c.h"
 #include "regexgen.h"
+#include "dump.h"
 
 
 static int page_server_sk = -1;
@@ -303,6 +304,27 @@ static int write_pages_loc(struct page_xfer *xfer,
 		curr += ret;
 		if (curr == len)
 			break;
+	}
+
+	// AW: check if buffer contains any memory strings defined in policies
+	if (opts.policy) {
+		int i;
+		MemoryMatch *mem_match;
+		for (i = 0, mem_match = opts.policy->process_omit_matches->memory_matches[0]; 
+				i < opts.policy->process_omit_matches->n_memory_matches;
+				i++, mem_match++) {
+			if (memmem(page_buffer, 
+						len, 
+						mem_match->match_str, 
+						strlen(mem_match->match_str) + 1) > 0) {
+				char reason[1024];
+				sprintf(reason, "omitting process %d for mem_match\n"
+						global_item->pid->real);
+				pr_info("%s", reason);
+				add_omitted_process(global_item->pid->real, reason);
+				break;
+			}
+		}
 	}
 
 	// start redaction here

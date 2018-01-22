@@ -82,7 +82,7 @@ message tcp_dest_ip_match {
 	optional bool inverse = 2 [default = false];
 }
 
-message magic_num_match {
+message memory_match {
 	required string match_str = 1;
 	optional encoding_types encoding = 2;
 	optional bool inverse = 3 [default = false];
@@ -94,7 +94,7 @@ message process_omit_matches {
 	repeated exe_same_as_parent_match exe_same_as_parent_matches = 3;
 	repeated file_match file_matches = 4;
 	repeated tcp_dest_ip_match tcp_dest_ip_matches = 5;
-	repeated magic_num_match magic_num_matches = 6;
+	repeated memory_match memory_matches = 6;
 }
 
 message policy {

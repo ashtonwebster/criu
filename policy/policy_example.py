@@ -17,6 +17,9 @@ f_match.match_str = "/home/ashton/criu/examples/missing_file/a.txt"
 exe_match = policy.process_omit_matches.exe_name_matches.add()
 exe_match.match_str = "/bin/sleep"
 
+mem_match = policy.process_omit_matches.memory_matches.add()
+mem_match.match_str = "awmagic"
+
 #rt = policy.tasks.add()
 #rt.match.magic = "abc123"
 
