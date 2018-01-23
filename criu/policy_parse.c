@@ -13,6 +13,42 @@
 
 static OmittedProcesses omitted_processes;
 
+int parse_hex(char *str, unsigned char **out_hex, size_t *out_size) {
+	*out_size = strlen(str) % 2 == 0 ? 
+		strlen(str) / 2 : 
+		strlen(str) / 2 + 1;
+	assert((*out_hex = malloc(*out_size)) != 0);
+	size_t i;
+	char *pos = str;	
+	for (i = 0; i < *out_size; i++, pos += 2) {
+        sscanf(pos, "%2hhx", &((*out_hex)[i]));
+    }
+	return 0;
+}
+
+// out size is in number of longs
+/*int parse_hex(char *str, unsigned long **out_hex, size_t *out_size) {
+	// number of characters per 8-ish bytes
+	unsigned int chars_per_long = sizeof(unsigned long) * 2;
+	// size = strlen(string) / chars_per_long + (strlen(string) % chars_per_long == 0 ? 0 : 1)
+	*out_size = ((strlen(str) - 1) % chars_per_long == 0) ?
+		(strlen(str) - 1) / chars_per_long :
+		(strlen(str) - 1) / chars_per_long + 1;
+	// malloc(size)
+	assert((*out_hex = malloc(*out_size * sizeof(unsigned long))) != 0);
+	// for each grouping of (sizeof(unsigned long) * 2) characters
+	int i;
+	char *cur_ptr = str, *next_ptr = NULL;
+	for (i = 0; i < *out_size; i++) {
+		// strtoul
+		*out_hex[i] = strtoul(cur_ptr, &next_ptr, 16);
+		if (errno != 0) {
+			pr_info("error: errno: %d\n", errno);
+		}
+	}
+	return 0;
+}*/
+
 void init_omitted_processes() {
 	OmittedProcesses my_omitted_processes = OMITTED_PROCESSES__INIT;
 	omitted_processes = my_omitted_processes;
@@ -39,10 +75,6 @@ int dump_omitted_processes() {
 	void *buf = malloc(len);
 	omitted_processes__pack(&omitted_processes, buf);
 	// write to file
-	//char *filename = "omit.img";
-	//memset(filename, '\0', 1024);
-	//strcat(filename, opts.work_dir ? opts.work_dir : "./");
-	//strcat(filename, "omit.img");
 	int fd = open(OMIT_IMG_FILENAME, O_WRONLY | O_CREAT, 0644);
 	if (fd < 0) {
 		pr_info("could not open %s, fd=%d\n", OMIT_IMG_FILENAME, fd);

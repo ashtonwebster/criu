@@ -58,6 +58,7 @@ struct policy {
 	ProcessOmitMatches *process_omit_matches;
 };
 
+int parse_hex(char *str, unsigned char **out_hex, size_t *out_size);
 void init_omitted_processes();
 OmittedProcesses *read_omitted_porcesses(void);
 int add_omitted_process(int pid, char *reason);

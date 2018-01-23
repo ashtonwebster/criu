@@ -12,7 +12,6 @@ void  main(void)
         // child process
 	execl("/home/ashton/criu/examples/mem_match/child", 
 			"/home/ashton/criu/examples/mem_match/child", 
-			"99999999", 
 			(char *)NULL);
     }
     else {

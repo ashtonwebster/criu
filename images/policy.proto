@@ -84,7 +84,7 @@ message tcp_dest_ip_match {
 
 message memory_match {
 	required string match_str = 1;
-	optional encoding_types encoding = 2;
+	optional encoding_types encoding = 2 [default = ASCII];
 	optional bool inverse = 3 [default = false];
 }
 

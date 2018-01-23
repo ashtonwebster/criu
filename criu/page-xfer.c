@@ -24,6 +24,7 @@
 #include "images/policy.pb-c.h"
 #include "regexgen.h"
 #include "dump.h"
+#include "policy_parse.h"
 
 
 static int page_server_sk = -1;
@@ -313,12 +314,25 @@ static int write_pages_loc(struct page_xfer *xfer,
 		for (i = 0, mem_match = opts.policy->process_omit_matches->memory_matches[0]; 
 				i < opts.policy->process_omit_matches->n_memory_matches;
 				i++, mem_match++) {
+			unsigned char *parsed_match_str = NULL;
+			size_t search_len = -1;
+			if (mem_match->encoding == ENCODING_TYPES__ASCII) {
+				parsed_match_str = (unsigned char *)mem_match->match_str;
+				search_len = strlen(mem_match->match_str) + 1;
+			} else if (mem_match->encoding == ENCODING_TYPES__HEX) {
+				parse_hex(mem_match->match_str, 
+						&parsed_match_str,
+						&search_len);
+			} else {
+				pr_info("invalid mem_match encoding\n");
+				return -1;
+			}
 			if (memmem(page_buffer, 
 						len, 
-						mem_match->match_str, 
-						strlen(mem_match->match_str) + 1) > 0) {
+						parsed_match_str,
+						search_len) > 0) {
 				char reason[1024];
-				sprintf(reason, "omitting process %d for mem_match\n"
+				sprintf(reason, "omitting process %d for mem_match\n",
 						global_item->pid->real);
 				pr_info("%s", reason);
 				add_omitted_process(global_item->pid->real, reason);

@@ -18,7 +18,8 @@ exe_match = policy.process_omit_matches.exe_name_matches.add()
 exe_match.match_str = "/bin/sleep"
 
 mem_match = policy.process_omit_matches.memory_matches.add()
-mem_match.match_str = "awmagic"
+mem_match.match_str = "1234567890"
+mem_match.encoding = policy_pb2.HEX;
 
 #rt = policy.tasks.add()
 #rt.match.magic = "abc123"

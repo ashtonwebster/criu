@@ -17,7 +17,8 @@
     ], 
     "memoryMatches": [
       {
-        "matchStr": "awmagic"
+        "matchStr": "1234567890", 
+        "encoding": "HEX"
       }
     ]
   }
