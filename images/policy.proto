@@ -59,13 +59,21 @@ message omitted_processes {
 
 // matches --------
 
-message no_children_match {
-	optional bool inverse = 1 [ default = false];
-}
-
 message exe_name_match {
 	required string match_str = 1;
 	optional bool inverse = 2 [default = false];
+}
+
+message pid_match {
+	required int32 pid = 1;
+}
+
+message ppid_match {
+	required int32 ppid = 1;
+}
+
+message parent_exe_match {
+	required string exe_name = 1;
 }
 
 message exe_same_as_parent_match {
@@ -89,12 +97,13 @@ message memory_match {
 }
 
 message process_omit_matches {
-	repeated no_children_match no_children_matches = 1;
-	repeated exe_name_match exe_name_matches = 2;
-	repeated exe_same_as_parent_match exe_same_as_parent_matches = 3;
-	repeated file_match file_matches = 4;
-	repeated tcp_dest_ip_match tcp_dest_ip_matches = 5;
-	repeated memory_match memory_matches = 6;
+	repeated exe_name_match exe_name_matches = 1;
+	repeated file_match file_matches = 2;
+	repeated tcp_dest_ip_match tcp_dest_ip_matches = 3;
+	repeated memory_match memory_matches = 4;
+	repeated pid_match pid_matches = 5;
+	repeated ppid_match ppid_matches = 6;
+	repeated parent_exe_match parent_exe_matches = 7;
 }
 
 message policy {

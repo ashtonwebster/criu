@@ -5,6 +5,7 @@
 #include "common/lock.h"
 #include "pid.h"
 #include "images/core.pb-c.h"
+#include "images/mm.pb-c.h"
 
 /*
  * That's the init process which usually inherit
@@ -29,6 +30,7 @@ struct pstree_item {
 		futex_t		task_st;
 		unsigned long	task_st_le_bits;
 	};
+	char 			*exe_name;
 };
 
 static inline pid_t vpid(const struct pstree_item *i)

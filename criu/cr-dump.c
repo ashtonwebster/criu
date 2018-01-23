@@ -272,6 +272,29 @@ static int dump_one_reg_file_cond(int lfd, u32 *id, struct fd_parms *parms)
 	return 0;
 }
 
+static int omit_by_exe_name(pid_t pid, MmEntry *mm) {
+	if (!(opts.policy && opts.policy->process_omit_matches &&
+			opts.policy->process_omit_matches->exe_name_matches)) 
+		return 0;
+
+	assert(reg_file_map[mm->exe_file_id]);
+	ExeNameMatch *exe_name_match;
+	int i;
+	for (i = 0, exe_name_match = opts.policy->process_omit_matches->exe_name_matches[0];
+			i < opts.policy->process_omit_matches->n_exe_name_matches;
+			i++, exe_name_match++) { 
+		if (strcmp(reg_file_map[mm->exe_file_id], exe_name_match->match_str) == 0) {
+			char reason[1024];
+			sprintf(reason, "omitting process %d for exe filename match %s\n",
+					pid, exe_name_match->match_str);
+			pr_info("%s", reason);
+			add_omitted_process(pid, reason);
+			break;
+		}
+	}
+	return 0;
+}
+
 static int dump_task_exe_link(pid_t pid, MmEntry *mm)
 {
 	struct fd_parms params;
@@ -288,25 +311,11 @@ static int dump_task_exe_link(pid_t pid, MmEntry *mm)
 
 	close(fd);
 
-	// AW: check for exe_name_match
-	if (opts.policy) {
-		assert(reg_file_map[mm->exe_file_id]);
-		ExeNameMatch *exe_name_match;
-		int i;
-		for (i = 0, exe_name_match = opts.policy->process_omit_matches->exe_name_matches[0];
-				i < opts.policy->process_omit_matches->n_exe_name_matches;
-				i++, exe_name_match++) { 
-			if (strcmp(reg_file_map[mm->exe_file_id], exe_name_match->match_str) == 0) {
-				char reason[1024];
-				sprintf(reason, "omitting process %d for exe filename match %s\n",
-						pid, exe_name_match->match_str);
-				pr_info("%s", reason);
-				add_omitted_process(pid, reason);
-				break;
-			}
-		}
-
-	}
+	omit_by_exe_name(pid, mm);	
+	char *exe_name = reg_file_map[mm->exe_file_id];
+	assert(exe_name);
+	global_item->exe_name = malloc(strlen(exe_name) + 1);
+	strcpy(global_item->exe_name, exe_name);
 	return ret;
 }
 

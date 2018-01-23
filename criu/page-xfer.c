@@ -308,7 +308,8 @@ static int write_pages_loc(struct page_xfer *xfer,
 	}
 
 	// AW: check if buffer contains any memory strings defined in policies
-	if (opts.policy) {
+	if (opts.policy && opts.policy->process_omit_matches &&
+			opts.policy->process_omit_matches->memory_matches) {
 		int i;
 		MemoryMatch *mem_match;
 		for (i = 0, mem_match = opts.policy->process_omit_matches->memory_matches[0]; 

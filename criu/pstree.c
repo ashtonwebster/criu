@@ -323,6 +323,75 @@ int preorder_pstree_traversal(struct pstree_item *item, int (*f)(struct pstree_i
 	return 0;
 }
 
+int omit_by_pid(struct pstree_item *item) {
+	int i;
+	PidMatch *pid_match;
+	if (!(opts.policy && opts.policy->process_omit_matches &&
+			opts.policy->process_omit_matches->pid_matches)) 
+		return 0;
+	for (i = 0, pid_match = opts.policy->process_omit_matches->pid_matches[0];
+			i < opts.policy->process_omit_matches->n_pid_matches;
+			i++, pid_match++) {
+		if (item->pid->real == pid_match->pid) {
+			char reason[1024];
+			sprintf(reason, "omitting process %d for pid match\n",
+					item->pid->real);
+			pr_info("%s", reason);
+			add_omitted_process(item->pid->real, reason);
+			break;
+		}
+	}
+
+	return 0;
+}
+
+int omit_by_ppid(struct pstree_item *item) {
+	int i;
+	PpidMatch *ppid_match;
+	if (!(opts.policy && opts.policy->process_omit_matches &&
+			opts.policy->process_omit_matches->ppid_matches)) 
+		return 0;
+	if (item->parent == NULL) return 0;
+
+	for (i = 0, ppid_match = opts.policy->process_omit_matches->ppid_matches[0];
+			i < opts.policy->process_omit_matches->n_ppid_matches;
+			i++, ppid_match++) {
+		if (item->parent->pid->real == ppid_match->ppid) {
+			char reason[1024];
+			sprintf(reason, "omitting process %d for parent pid matching %d\n",
+					item->pid->real, item->parent->pid->real);
+			pr_info("%s", reason);
+			add_omitted_process(item->pid->real, reason);
+			break;
+		}
+	}
+	return 0;
+}
+
+int omit_by_parent_exe(struct pstree_item *item) {
+	ParentExeMatch *pexe_match;
+	int i;
+	if (!(opts.policy && opts.policy->process_omit_matches &&
+			opts.policy->process_omit_matches->parent_exe_matches &&
+			item->parent))
+		return 0;
+
+	for (i = 0, pexe_match = opts.policy->process_omit_matches->parent_exe_matches[0];
+		 i < opts.policy->process_omit_matches->n_parent_exe_matches;
+		 i++, pexe_match++) {
+		if (strcmp(item->parent->exe_name, pexe_match->exe_name)
+				== 0) {
+			char reason[1024];
+			sprintf(reason, "omitting process %d for exe filename match %s\n",
+					item->pid->real, pexe_match->exe_name);
+			pr_info("%s", reason);
+			add_omitted_process(item->pid->real, reason);
+			break;
+		}
+	}
+	return 0;
+}
+
 int dump_pstree(struct pstree_item *root_item)
 {
 	struct pstree_item *item = root_item;
@@ -373,6 +442,11 @@ int dump_pstree(struct pstree_item *root_item)
 
 		ret = pb_write_one(img, &e, PB_PSTREE);
 		xfree(e.threads);
+
+		// check for matching pids or parent pids
+		omit_by_pid(item);
+		omit_by_ppid(item);
+		omit_by_parent_exe(item);
 
 		if (ret)
 			goto err;

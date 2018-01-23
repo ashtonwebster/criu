@@ -1,0 +1,9 @@
+{
+  "processOmitMatches": {
+    "parentExeMatches": [
+      {
+        "exe_name": "/home/ashton/criu/examples/exe_name_match/fork2"
+      }
+    ]
+  }
+}
