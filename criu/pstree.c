@@ -55,7 +55,7 @@ int check_files(struct pstree_item* item) {
 		if (e->type == FD_TYPES__REG) {
 			char path[1024];
 			const char *ignore_files[] = {"run/udev/queue.bin", "proc/kmsg",
-				"run/crond.pid"};
+				"run/crond.pid", "dev/null.cr_link"};
 			const char *ignore_file;
 			int i, skip_file = 0;
 			path[0] = '\0';
@@ -68,7 +68,7 @@ int check_files(struct pstree_item* item) {
 					find_file_desc_raw(FD_TYPES__REG, e->id), 
 					NULL, 
 					0);
-			for (i=0; i < 3; i++) {
+			for (i=0; i < 4; i++) {
 				ignore_file=ignore_files[i];
 				if (strcmp(ignore_file, path_end) == 0) {
 					pr_info("ignoring missing file %s\n", ignore_file);
@@ -81,7 +81,7 @@ int check_files(struct pstree_item* item) {
 			if (access( path, F_OK ) == -1) {
 				pr_info("need to remove pid %d because it has missing path %s\n", 
 						vpid(item), path);
-                //return FILE_NOT_FOUND;
+                return FILE_NOT_FOUND;
 			}
 		}
 	}
@@ -728,10 +728,11 @@ static int read_pstree_image(pid_t *pid_max)
 
 			pid = pstree_pid_by_virt(e->ppid);
 			if (!pid || pid->state == TASK_UNDEF || pid->state == TASK_THREAD) {
-				pr_err("Can't find a parent for %d\n", vpid(pi));
+				pr_info("Can't find a parent for %d\n", vpid(pi));
 				pstree_entry__free_unpacked(e, NULL);
-				xfree(pi);
-				goto err;
+				//xfree(pi);
+				//goto err;
+				continue;
 			}
 
 			parent = pid->item;
