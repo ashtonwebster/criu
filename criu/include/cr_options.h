@@ -123,6 +123,7 @@ struct cr_options {
 	int			status_fd;
 	bool			orphan_pts_master;
 	struct policy *policy;
+	char		*base_path;
 };
 
 extern struct cr_options opts;

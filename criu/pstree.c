@@ -54,27 +54,40 @@ int check_files(struct pstree_item* item) {
 		assert(e);
 		if (e->type == FD_TYPES__REG) {
 			char path[1024];
-			path[0] = '/'; // first char is opening slash
-			path[1] = '\0'; // null terminate
+			const char *ignore_files[] = {"run/udev/queue.bin", "proc/kmsg",
+				"run/crond.pid"};
+			const char *ignore_file;
+			int i, skip_file = 0;
+			path[0] = '\0';
+			//path[0] = '/'; // first char is opening slash
+			//path[1] = '\0'; // null terminate
+			
+			// append base path (container base or /)
+			strcat(path, opts.base_path);
 			char *path_end = reg_file_path(
 					find_file_desc_raw(FD_TYPES__REG, e->id), 
 					NULL, 
 					0);
+			for (i=0; i < 3; i++) {
+				ignore_file=ignore_files[i];
+				if (strcmp(ignore_file, path_end) == 0) {
+					pr_info("ignoring missing file %s\n", ignore_file);
+					skip_file = 1;
+				}
+			}
+			if (skip_file) continue;
+
 			strcat(path, path_end); // append starting slash to path
 			if (access( path, F_OK ) == -1) {
-				pr_info("need to remove pid %d\n", vpid(item));
-                return FILE_NOT_FOUND;
+				pr_info("need to remove pid %d because it has missing path %s\n", 
+						vpid(item), path);
+                //return FILE_NOT_FOUND;
 			}
-		}
-
-		if (ret < 0) {
-			fdinfo_entry__free_unpacked(e, NULL);
-			break;
 		}
 	}
 
 	close_image(img);
-	return ret;
+	return 0;
 }
 
 
@@ -643,7 +656,6 @@ static int read_pstree_image(pid_t *pid_max)
 		if (ret <= 0)
 			break;
 
-		ret = -1;
 		pi = lookup_create_item(e->pid);
 
 		if (pi == NULL)
@@ -662,7 +674,7 @@ static int read_pstree_image(pid_t *pid_max)
         }
 
 		// AW: check if process in omitted list
-		if (op_list != NULL) {
+		if (op_list != NULL && op_list->omitted_processes) {
 			// for each process in omitted list
 			for (j = 0, op = op_list->omitted_processes[0]; 
 					j < op_list->n_omitted_processes; 

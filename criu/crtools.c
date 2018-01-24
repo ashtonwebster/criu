@@ -82,6 +82,7 @@ void init_opts(void)
 	opts.timeout = DEFAULT_TIMEOUT;
 	opts.empty_ns = 0;
 	opts.status_fd = -1;
+	opts.base_path = "/var/lib/lxc/c1/rootfs/";
 }
 
 static int parse_join_ns(const char *ptr)
@@ -337,6 +338,7 @@ int main(int argc, char *argv[], char *envp[])
 		BOOL_OPT(SK_CLOSE_PARAM, &opts.tcp_close),
 		{ "verbosity",			optional_argument,	0, 'v'	},
 		{ "policy-path", 		required_argument,  0, 1089 },
+		{ "base-path", 		required_argument,  0, 1090 },
 		{ },
 	};
 
@@ -632,7 +634,10 @@ int main(int argc, char *argv[], char *envp[])
 			usage_error = false;
 			goto usage;
 		case 1089:
-			opts.policy = optarg == NULL ? NULL : parse_policy(optarg);
+			opts.policy = (optarg == NULL) ? NULL : parse_policy(optarg);
+			break;
+		case 1090:
+			opts.base_path = optarg;
 			break;
 		default:
 			goto usage;

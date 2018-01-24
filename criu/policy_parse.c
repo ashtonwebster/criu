@@ -95,7 +95,7 @@ OmittedProcesses *read_omitted_porcesses(void) {
 		return NULL;
 	}
 
-	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) >0);
+	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) >= 0);
 	close(fd);
 	return omitted_processes__unpack(NULL, real_size, buf);
 }
