@@ -178,8 +178,9 @@ struct policy *parse_policy(char *policy_path) {
 	int fd = open(policy_path, O_RDONLY);
 	assert(fd >= 0);
 
-	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) > 0);
+	assert((real_size = read(fd, (void*)buf, MAX_MESSAGE_SIZE)) >= 0);
 	close(fd);
+	if (real_size == 0) return NULL;
 	Policy *policy = policy__unpack(NULL, real_size, buf);
 	struct policy *mypolicy = xmalloc(sizeof(struct policy));
 	assert(policy!= 0);

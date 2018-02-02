@@ -597,14 +597,15 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 		goto err;
 
 	ret = 0; /* Don't fail if nr_fds == 0 */
-	for (off = 0; off < dfds->nr_fds; off += nr_fds) {
+	for (off = 0; off < dfds->nr_fds; off += nr_fds, ret = 0) {
 		if (nr_fds + off > dfds->nr_fds)
 			nr_fds = dfds->nr_fds - off;
 
 		ret = parasite_drain_fds_seized(ctl, dfds, nr_fds,
 							off, lfds, fd_opts);
 		if (ret)
-			goto err;
+			continue;
+			//goto err;
 
 		for (i = 0; i < nr_fds; i++) {
 			FdinfoEntry e = FDINFO_ENTRY__INIT;
@@ -613,14 +614,15 @@ int dump_task_files_seized(struct parasite_ctl *ctl, struct pstree_item *item,
 						lfds[i], fd_opts + i, ctl, &e);
 			close(lfds[i]);
 			if (ret)
-				break;
+				continue;
+				//break;
 
 			ret = pb_write_one(img, &e, PB_FDINFO);
 			if (ret)
 				break;
 
 			// AW: check if it is a file we don't want to restore
-			if (opts.policy && e.type == FD_TYPES__REG) { 
+			if (opts.policy && opts.policy->process_omit_matches->n_file_matches > 0 && e.type == FD_TYPES__REG) { 
 				/*reg_file_list[n_reg_files++] = e.id;*/
 				assert(reg_file_map[e.id]);
 				int j;

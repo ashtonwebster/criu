@@ -280,15 +280,14 @@ static int omit_by_exe_name(pid_t pid, MmEntry *mm) {
 	assert(reg_file_map[mm->exe_file_id]);
 	ExeNameMatch *exe_name_match;
 	int i;
-	for (i = 0, exe_name_match = opts.policy->process_omit_matches->exe_name_matches[0];
-			i < opts.policy->process_omit_matches->n_exe_name_matches;
-			i++, exe_name_match++) { 
+	for (i = 0; i < opts.policy->process_omit_matches->n_exe_name_matches; i++) { 
+		exe_name_match = opts.policy->process_omit_matches->exe_name_matches[i];
 		if (strcmp(reg_file_map[mm->exe_file_id], exe_name_match->match_str) == 0) {
 			char reason[1024];
 			sprintf(reason, "omitting process %d for exe filename match %s\n",
-					pid, exe_name_match->match_str);
+					vpid(global_item), exe_name_match->match_str);
 			pr_info("%s", reason);
-			add_omitted_process(pid, reason);
+			add_omitted_process(vpid(global_item), reason);
 			break;
 		}
 	}
