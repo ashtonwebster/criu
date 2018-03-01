@@ -82,7 +82,6 @@ void init_opts(void)
 	opts.timeout = DEFAULT_TIMEOUT;
 	opts.empty_ns = 0;
 	opts.status_fd = -1;
-	opts.base_path = "/var/lib/lxc/c1/rootfs/";
 }
 
 static int parse_join_ns(const char *ptr)

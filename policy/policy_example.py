@@ -8,14 +8,14 @@ if (len(sys.argv) != 3) :
 
 policy = policy_pb2.policy()
 
-tcp = policy.process_omit_matches.tcp_dest_ip_matches.add()
-tcp.match_str = "127.0.0.1"
+#tcp = policy.process_omit_matches.tcp_dest_ip_matches.add()
+#tcp.match_str = "127.0.0.1"
 
-f_match = policy.process_omit_matches.file_matches.add()
-f_match.match_str = "/home/ashton/criu/examples/missing_file/a.txt"
+#f_match = policy.process_omit_matches.file_matches.add()
+#f_match.match_str = "/home/ashton/criu/examples/missing_file/a.txt"
 
-exe_match = policy.process_omit_matches.exe_name_matches.add()
-exe_match.match_str = "/bin/sleep"
+#exe_match = policy.process_omit_matches.exe_name_matches.add()
+#exe_match.match_str = "/bin/sleep"
 
 mem_match = policy.process_omit_matches.memory_matches.add()
 mem_match.match_str = "1234567890"

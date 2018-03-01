@@ -414,6 +414,7 @@ static int dump_one_netdev(int type, struct ifinfomsg *ifi,
 		netdev.has_address = true;
 		netdev.address.data = nla_data(tb[IFLA_ADDRESS]);
 		netdev.address.len = nla_len(tb[IFLA_ADDRESS]);
+		// AW: REPLACE MAC HERE
 		pr_info("Found ll addr (%02x:../%d) for %s\n",
 				(int)netdev.address.data[0],
 				(int)netdev.address.len, netdev.name);
@@ -1971,8 +1972,8 @@ int netns_keep_nsfd(void)
 static int iptables_restore(bool ipv6, char *buf, int size)
 {
 	int pfd[2], ret = -1;
-	char *cmd4[] = {"iptables-restore", "-w", "--noflush", NULL};
-	char *cmd6[] = {"ip6tables-restore", "-w", "--noflush", NULL};
+	char *cmd4[] = {"iptables-restore", "--noflush", NULL};
+	char *cmd6[] = {"ip6tables-restore", "--noflush", NULL};
 	char **cmd = ipv6 ? cmd6 : cmd4;;
 
 	if (pipe(pfd) < 0) {
@@ -2000,7 +2001,8 @@ int network_lock_internal()
 				"-I INPUT -j CRIU\n"
 				"-I OUTPUT -j CRIU\n"
 				"-A CRIU -m mark --mark " __stringify(SOCCR_MARK) " -j ACCEPT\n"
-				"-A CRIU -j DROP\n"
+				//"-A CRIU -j DROP\n"
+				"-A CRIU -j NFQUEUE --queue-num 1\n"
 				"COMMIT\n";
 	int ret = 0, nsret;
 

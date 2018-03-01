@@ -26,6 +26,21 @@
 struct pstree_item *root_item;
 static struct rb_root pid_root_rb;
 
+int check_file(char *path_end, struct pstree_item *item) {
+	char path[1024];
+	path[0] = '\0';
+	assert(opts.base_path);
+	strcat(path, opts.base_path);
+
+	strcat(path, path_end);
+	if (access( path, F_OK ) == -1) {
+		pr_info("need to remove pid %d because it has missing path %s\n", 
+				vpid(item), path);
+		return FILE_NOT_FOUND;
+	}
+	return 0;
+}
+
 int check_files(struct pstree_item* item) {
 	int ret = 0;
 	struct cr_img *img;
@@ -53,22 +68,20 @@ int check_files(struct pstree_item* item) {
 
 		assert(e);
 		if (e->type == FD_TYPES__REG) {
-			char path[1024];
+			
 			const char *ignore_files[] = {"run/udev/queue.bin", "proc/kmsg",
-				"run/crond.pid", "dev/null.cr_link"};
+				"run/crond.pid", "dev/null.cr_link", "proc/sys/kernel/hostname",
+				"sys/fs/cgroup/systemd", "proc/1/mountinfo"
+			};
 			const char *ignore_file;
 			int i, skip_file = 0;
-			path[0] = '\0';
-			//path[0] = '/'; // first char is opening slash
-			//path[1] = '\0'; // null terminate
 			
 			// append base path (container base or /)
-			strcat(path, opts.base_path);
 			char *path_end = reg_file_path(
 					find_file_desc_raw(FD_TYPES__REG, e->id), 
 					NULL, 
 					0);
-			for (i=0; i < 4; i++) {
+			for (i=0; i < sizeof(ignore_files) / sizeof(ignore_files[0]); i++) {
 				ignore_file=ignore_files[i];
 				if (strcmp(ignore_file, path_end) == 0) {
 					pr_info("ignoring missing file %s\n", ignore_file);
@@ -76,15 +89,16 @@ int check_files(struct pstree_item* item) {
 				}
 			}
 			if (skip_file) continue;
-
-			strcat(path, path_end); // append starting slash to path
-			if (access( path, F_OK ) == -1) {
-				pr_info("need to remove pid %d because it has missing path %s\n", 
-						vpid(item), path);
-                return FILE_NOT_FOUND;
+			if (memcmp(path_end, "run/log/journal", strlen("run/log/journal")) == 0) {
+				pr_info("ignoring missing file with base run/log/journal");
+				continue;
 			}
+			if (check_file(path_end, item) == FILE_NOT_FOUND) return FILE_NOT_FOUND;
 		}
 	}
+
+	// check executable filename
+	//if (check_file(item->exe_name, item) == FILE_NOT_FOUND) return FILE_NOT_FOUND;
 
 	close_image(img);
 	return 0;
@@ -644,13 +658,6 @@ static int read_pstree_image(pid_t *pid_max)
 		PstreeEntry *e;
 		should_skip = 0;
 
-		// AW added to prevent other children from loading
-		/*if (first) {
-			first = 0;
-		} else {
-			break;
-		}*/
-
 		ret = pb_read_one_eof(img, &e, PB_PSTREE);
 
 		if (ret <= 0)
@@ -661,17 +668,6 @@ static int read_pstree_image(pid_t *pid_max)
 		if (pi == NULL)
 			break;
 		BUG_ON(pi->pid->state != TASK_UNDEF);
-
-		//AW added
-		assert(!read_pstree_ids(pi));
-        ret = check_files(pi);
-        pi->ids = NULL;
-        if (ret < 0) {
-            break;
-        } else if (ret == FILE_NOT_FOUND) {
-            // skip this child
-            continue;
-        }
 
 		// AW: check if process in omitted list
 		if (op_list != NULL && op_list->omitted_processes) {
@@ -688,9 +684,22 @@ static int read_pstree_image(pid_t *pid_max)
 
 		if (should_skip) {
 			// skip list in omitted processes
+			pr_info("skipping: %d\n", vpid(pi));
 			continue;
 		}
 
+		if (opts.base_path) {
+			//AW added
+			assert(!read_pstree_ids(pi));
+			ret = check_files(pi);
+			pi->ids = NULL;
+			if (ret < 0) {
+				break;
+			} else if (ret == FILE_NOT_FOUND) {
+				// skip this child
+				continue;
+			}
+		}
 
 		/*
 		 * All pids should be added in the tree to be able to find

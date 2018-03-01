@@ -460,7 +460,7 @@ static int do_dump_one_inet_fd(int lfd, u32 id, const struct fd_parms *p, int fa
 
 	// decide whether to restore this to closed state
 	// NOTE: only works for ipv4 addresses
-	if (opts.policy && ie.family == AF_INET) {
+	if (opts.policy && opts.policy->process_omit_matches->n_tcp_dest_ip_matches > 0 && ie.family == AF_INET) {
 		int i, n;
 		unsigned int ip_addr;
 		TcpDestIpMatch *tcp_dest_match = 
