@@ -700,7 +700,7 @@ static int read_pstree_image(pid_t *pid_max)
 				continue;
 			}
 		}
-
+		
 		/*
 		 * All pids should be added in the tree to be able to find
 		 * free pid-s for helpers. pstree_item for these pid-s will
